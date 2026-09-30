@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "TalentOS",
+      "hasCanvas": false,
+      "bodyTextLen": 28,
+      "bodyTextHash": "ed8aa4d70858a193af892c3340fa0c2632e93a39573ae25368becd69863e3156",
+      "bodyTextPrefix": "TalentOS Opening your books…",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "TalentOS",
+      "hasCanvas": false,
+      "bodyTextLen": 28,
+      "bodyTextHash": "ed8aa4d70858a193af892c3340fa0c2632e93a39573ae25368becd69863e3156",
+      "bodyTextPrefix": "TalentOS Opening your books…",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}
