@@ -1,247 +1,610 @@
 import { i as __toESM } from "../_runtime.mjs";
 import { b as require_jsx_runtime, q as require_react } from "../_libs/@tanstack/react-router+[...].mjs";
 import { n as TSS_SERVER_FUNCTION, r as getServerFnById, t as createServerFn } from "./ssr.mjs";
+import { a as validateAustralianABN, i as formatAUD, n as evaluateGSTTurnover, r as evaluateWorkerClassification, t as estimateAustralianTax } from "./taxAndRegulatoryEngine-C7FfSM1R.mjs";
 import { $ as Camera, A as LogIn, B as FileCheck, C as Package, D as MapPin, E as Maximize2, F as Landmark, G as Clock, H as ExternalLink, I as HandCoins, J as CircleCheckBig, K as Circle, L as Globe, M as LayoutGrid, N as LayoutDashboard, O as Mail, P as Laptop, Q as Check, R as FolderClosed, S as PiggyBank, T as Menu, U as Download, V as Eye, W as Database, X as ChevronRight, Y as CircleAlert, Z as ChevronLeft, _ as RotateCcw, a as Upload, at as ArrowRight, b as Printer, c as Sun, d as ShoppingBag, et as Calendar, f as Shield, g as Search, h as Send, i as User, it as Bell, j as Lock, k as LogOut, l as Sparkles, m as Settings, n as Wallet, nt as Bot, o as TriangleAlert, ot as ArrowLeft, p as ShieldCheck, q as CircleCheck, r as Users, rt as BookOpen, s as TrendingUp, t as X, tt as Briefcase, u as SlidersHorizontal, v as RefreshCw, w as Moon, x as Plus, y as Receipt, z as FileText } from "../_libs/lucide-react.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-ufIdWBor.js
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-JSczJ_c9.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
-/**
-* Validates Australian Business Number (ABN) using official ATO/ABR modulus 89 algorithm.
-* An ABN is 11 digits.
-* 1. Subtract 1 from the first (left) digit.
-* 2. Multiply each digit by its weighting factor: [10, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19].
-* 3. Sum the products.
-* 4. Divide sum by 89; if remainder is 0, the ABN is mathematically valid.
-*/
-function validateAustralianABN(abnInput) {
-	const clean = abnInput.replace(/\s+/g, "");
-	if (!/^\d{11}$/.test(clean)) return {
-		isValid: false,
-		formatted: abnInput,
-		error: "ABN must consist of exactly 11 numeric digits."
+var createSsrRpc = (functionId) => {
+	const url = "/_serverFn/" + functionId;
+	const serverFnMeta = { id: functionId };
+	const fn = async (...args) => {
+		return (await getServerFnById(functionId, { origin: "server" }))(...args);
 	};
-	const weights = [
-		10,
-		1,
-		3,
-		5,
-		7,
-		9,
-		11,
-		13,
-		15,
-		17,
-		19
-	];
-	const digits = clean.split("").map(Number);
-	digits[0] -= 1;
-	let sum = 0;
-	for (let i = 0; i < 11; i++) sum += digits[i] * weights[i];
-	const isValid = sum % 89 === 0;
-	return {
-		isValid,
-		formatted: `${clean.slice(0, 2)} ${clean.slice(2, 5)} ${clean.slice(5, 8)} ${clean.slice(8, 11)}`,
-		error: isValid ? void 0 : "ABN checksum failed official ABR modulus-89 verification."
+	return Object.assign(fn, {
+		url,
+		serverFnMeta,
+		[TSS_SERVER_FUNCTION]: true
+	});
+};
+function asAbn(input) {
+	if (typeof input === "string") return input;
+	if (input && typeof input === "object" && "abn" in input) return String(input.abn ?? "");
+	return "";
+}
+var lookupAbn = createServerFn({ method: "POST" }).validator(asAbn).handler(createSsrRpc("034379341be875c18e9c2b99abd6431701f16ded51965b8d7ede2df2eaf88538"));
+var AbnCheck = ({ abn, booksName, onUse }) => {
+	const [hit, setHit] = (0, import_react.useState)(null);
+	const [busy, setBusy] = (0, import_react.useState)(false);
+	const [error, setError] = (0, import_react.useState)("");
+	const run = async () => {
+		setBusy(true);
+		setError("");
+		try {
+			setHit(await lookupAbn({ data: abn }));
+		} catch {
+			setError("Could not reach the register from here.");
+		} finally {
+			setBusy(false);
+		}
 	};
-}
-/**
-* Format currency to AUD ($)
-*/
-function formatAUD(amount) {
-	return new Intl.NumberFormat("en-AU", {
-		style: "currency",
-		currency: "AUD",
-		minimumFractionDigits: 2,
-		maximumFractionDigits: 2
-	}).format(amount);
-}
-/**
-* Versioned Australian Regulatory Rules (as of 2026/2027 Financial Year)
-*/
-var VERSIONED_RULES = {
-	GST_THRESHOLD: {
-		ruleId: "ATO.GST.THRESHOLD.V2026",
-		standardThreshold: 75e3,
-		nonProfitThreshold: 15e4,
-		rate: .1,
-		authority: "ATO",
-		sourceRef: "QC 22412 - Registering for GST",
-		effectiveFrom: "2000-07-01"
-	},
-	SUPER_GUARANTEE: {
-		ruleId: "ATO.SG.RATE.V2025",
-		rate: .12,
-		authority: "ATO",
-		sourceRef: "Super guarantee percentage rates table",
-		effectiveFrom: "2025-07-01"
-	},
-	ABR_CHANGE_WINDOW: {
-		ruleId: "ABR.DETAILS.UPDATE.28DAYS",
-		daysAllowed: 28,
-		authority: "ABR",
-		sourceRef: "Updating or cancelling your ABN (28 day rule)"
-	},
-	ASIC_LARGE_PTY: {
-		ruleId: "ASIC.LARGE.PROPRIETARY.V2019",
-		revenueThreshold: 5e7,
-		grossAssetsThreshold: 25e6,
-		employeeThreshold: 100,
-		criteriaNeeded: 2,
-		authority: "ASIC",
-		sourceRef: "Corporations Act 2001 s 45A(3)"
-	},
-	INDIVIDUAL_TAX_RATES_2026_27: {
-		ruleId: "ATO.INDIVIDUAL_RATES.2026_2027",
-		brackets: [
+	const mismatch = Boolean(hit?.found && booksName && hit.legalName && booksName.trim().toLowerCase() !== hit.legalName.trim().toLowerCase());
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "rounded-xl border border-neutral-800 bg-neutral-950 p-3 text-xs text-neutral-300",
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "flex flex-wrap items-center justify-between gap-2",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "Checks the public ABN Lookup record. It does not lodge anything with the ATO." }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+					type: "button",
+					onClick: () => void run(),
+					disabled: busy || abn.replace(/\D/g, "").length < 11,
+					className: "rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-[#fff] disabled:opacity-40",
+					children: busy ? "Checking…" : "Check the register"
+				})]
+			}),
+			error && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+				className: "mt-2 text-rose-300",
+				children: error
+			}),
+			hit && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "mt-3 space-y-1",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "font-semibold text-white",
+						children: hit.found ? hit.legalName : "No public record"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: hit.message }),
+					hit.found && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: hit.entityTypeLabel }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: hit.gstText }),
+						hit.location && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", { children: ["Location ", hit.location] })
+					] }),
+					mismatch && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+						className: "text-amber-300",
+						children: [
+							"Your books say ",
+							booksName,
+							". The register says ",
+							hit.legalName,
+							"."
+						]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex flex-wrap gap-2 pt-2",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("a", {
+							href: hit.lookupUrl,
+							target: "_blank",
+							rel: "noreferrer",
+							className: "inline-flex items-center gap-1 font-semibold text-accent",
+							children: ["Open ABN Lookup ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ExternalLink, { className: "h-3 w-3" })]
+						}), hit.found && onUse && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+							type: "button",
+							onClick: () => onUse(hit),
+							className: "font-semibold text-ink underline-offset-2 hover:underline",
+							children: "Use this record on the books"
+						})]
+					})
+				]
+			})
+		]
+	});
+};
+var INDUSTRIES = [
+	{
+		id: "creator",
+		label: "Creator & talent",
+		blurb: "Brand work, content, and appearances.",
+		jobNoun: "Booking",
+		titleLabel: "Campaign / deal title",
+		titlePlaceholder: "e.g. Spring campaign, 3 reels",
+		clientLabel: "Client",
+		feeLabel: "Fee (AUD)",
+		types: [
 			{
-				min: 0,
-				max: 18200,
-				rate: 0,
-				base: 0
+				value: "campaign",
+				label: "Full campaign"
 			},
 			{
-				min: 18201,
-				max: 45e3,
-				rate: .16,
-				base: 0
+				value: "ugc",
+				label: "UGC"
 			},
 			{
-				min: 45001,
-				max: 135e3,
-				rate: .3,
-				base: 4288
+				value: "paid_post",
+				label: "Paid post / reel"
 			},
 			{
-				min: 135001,
-				max: 19e4,
-				rate: .37,
-				base: 31288
+				value: "event_appearance",
+				label: "Event / appearance"
 			},
 			{
-				min: 190001,
-				max: Infinity,
-				rate: .45,
-				base: 51638
+				value: "modelling",
+				label: "Modelling & stills"
+			},
+			{
+				value: "livestream",
+				label: "Livestream"
+			},
+			{
+				value: "licensing",
+				label: "Content licensing"
+			},
+			{
+				value: "sponsored_content",
+				label: "Sponsored content"
 			}
 		],
-		medicareLevyRate: .02
+		streams: [
+			{
+				key: "hasBookings",
+				label: "Brand deals",
+				desc: "Posts, UGC, appearances, and campaigns."
+			},
+			{
+				key: "hasPlatformPayouts",
+				label: "Platform payouts",
+				desc: "YouTube, TikTok, Patreon, and similar."
+			},
+			{
+				key: "hasDigitalProducts",
+				label: "Digital products",
+				desc: "Presets, guides, and downloads."
+			},
+			{
+				key: "hasPhysicalProducts",
+				label: "Merch",
+				desc: "Apparel, prints, and physical goods."
+			},
+			{
+				key: "hasContractors",
+				label: "Contractors",
+				desc: "Editors, videographers, assistants."
+			},
+			{
+				key: "hasEmployees",
+				label: "Staff",
+				desc: "People you pay wages."
+			}
+		]
+	},
+	{
+		id: "trades",
+		label: "Trades",
+		blurb: "Call-outs, installs, and maintenance.",
+		jobNoun: "Job",
+		titleLabel: "Job title",
+		titlePlaceholder: "e.g. Switchboard upgrade, Bondi",
+		clientLabel: "Customer",
+		feeLabel: "Quote / job price (AUD)",
+		types: [
+			{
+				value: "quoted_job",
+				label: "Quoted job"
+			},
+			{
+				value: "callout",
+				label: "Call-out"
+			},
+			{
+				value: "install",
+				label: "Installation"
+			},
+			{
+				value: "maintenance",
+				label: "Maintenance"
+			},
+			{
+				value: "repair",
+				label: "Repair"
+			}
+		],
+		streams: [
+			{
+				key: "hasBookings",
+				label: "Quoted jobs",
+				desc: "Work you price and invoice."
+			},
+			{
+				key: "hasPhysicalProducts",
+				label: "Materials",
+				desc: "Parts and materials on the invoice."
+			},
+			{
+				key: "hasContractors",
+				label: "Subcontractors",
+				desc: "Other trades you bring in."
+			},
+			{
+				key: "hasEmployees",
+				label: "Apprentices or staff",
+				desc: "People on wages."
+			}
+		]
+	},
+	{
+		id: "professional",
+		label: "Professional services",
+		blurb: "Advice, retainers, and workshops.",
+		jobNoun: "Engagement",
+		titleLabel: "Engagement title",
+		titlePlaceholder: "e.g. Quarterly advisory, Northside",
+		clientLabel: "Client",
+		feeLabel: "Fee (AUD)",
+		types: [
+			{
+				value: "consult",
+				label: "Consult"
+			},
+			{
+				value: "session",
+				label: "Session"
+			},
+			{
+				value: "retainer",
+				label: "Retainer"
+			},
+			{
+				value: "workshop",
+				label: "Workshop"
+			}
+		],
+		streams: [
+			{
+				key: "hasBookings",
+				label: "Client work",
+				desc: "Advice, projects, and sessions."
+			},
+			{
+				key: "hasSubscriptions",
+				label: "Retainers",
+				desc: "Ongoing monthly work."
+			},
+			{
+				key: "hasContractors",
+				label: "Associates",
+				desc: "People you subcontract."
+			},
+			{
+				key: "hasEmployees",
+				label: "Staff",
+				desc: "People on wages."
+			}
+		]
+	},
+	{
+		id: "health",
+		label: "Health & wellbeing",
+		blurb: "Appointments, treatments, and packages.",
+		jobNoun: "Appointment",
+		titleLabel: "Appointment",
+		titlePlaceholder: "e.g. Initial consult, 60 minutes",
+		clientLabel: "Client",
+		feeLabel: "Fee (AUD)",
+		types: [
+			{
+				value: "appointment",
+				label: "Appointment"
+			},
+			{
+				value: "treatment",
+				label: "Treatment"
+			},
+			{
+				value: "package",
+				label: "Package"
+			},
+			{
+				value: "session",
+				label: "Session"
+			}
+		],
+		streams: [
+			{
+				key: "hasBookings",
+				label: "Appointments",
+				desc: "Sessions you book and invoice."
+			},
+			{
+				key: "hasDigitalProducts",
+				label: "Programs",
+				desc: "Plans or downloads you sell."
+			},
+			{
+				key: "hasContractors",
+				label: "Practitioners",
+				desc: "Other practitioners you pay."
+			},
+			{
+				key: "hasEmployees",
+				label: "Staff",
+				desc: "Reception or clinicians on wages."
+			}
+		]
+	},
+	{
+		id: "hospitality",
+		label: "Hospitality & events",
+		blurb: "Functions, catering, and bookings.",
+		jobNoun: "Booking",
+		titleLabel: "Booking title",
+		titlePlaceholder: "e.g. Saturday function, 40 guests",
+		clientLabel: "Client",
+		feeLabel: "Price (AUD)",
+		types: [
+			{
+				value: "function",
+				label: "Function"
+			},
+			{
+				value: "event_appearance",
+				label: "Event"
+			},
+			{
+				value: "catering",
+				label: "Catering"
+			},
+			{
+				value: "service",
+				label: "Service"
+			}
+		],
+		streams: [
+			{
+				key: "hasBookings",
+				label: "Events & bookings",
+				desc: "Functions and dated work."
+			},
+			{
+				key: "hasPhysicalProducts",
+				label: "Food & goods",
+				desc: "What you sell on the day."
+			},
+			{
+				key: "hasContractors",
+				label: "Casual crew",
+				desc: "People you engage per job."
+			},
+			{
+				key: "hasEmployees",
+				label: "Staff",
+				desc: "People on wages."
+			}
+		]
+	},
+	{
+		id: "maker",
+		label: "Maker & retail",
+		blurb: "Custom orders, commissions, and repairs.",
+		jobNoun: "Order",
+		titleLabel: "Order title",
+		titlePlaceholder: "e.g. Custom table, walnut",
+		clientLabel: "Customer",
+		feeLabel: "Price (AUD)",
+		types: [
+			{
+				value: "custom_order",
+				label: "Custom order"
+			},
+			{
+				value: "commission",
+				label: "Commission"
+			},
+			{
+				value: "repair",
+				label: "Repair"
+			},
+			{
+				value: "workshop",
+				label: "Workshop"
+			}
+		],
+		streams: [
+			{
+				key: "hasBookings",
+				label: "Commissions",
+				desc: "Work made to order."
+			},
+			{
+				key: "hasPhysicalProducts",
+				label: "Goods for sale",
+				desc: "Ready-made stock."
+			},
+			{
+				key: "hasDigitalProducts",
+				label: "Online sales",
+				desc: "Orders that come in online."
+			},
+			{
+				key: "hasEmployees",
+				label: "Staff",
+				desc: "People on wages."
+			}
+		]
+	},
+	{
+		id: "general",
+		label: "Other sole trader",
+		blurb: "Any other trade. Jobs, quotes, and services.",
+		jobNoun: "Job",
+		titleLabel: "Job title",
+		titlePlaceholder: "e.g. Site visit and quote",
+		clientLabel: "Customer",
+		feeLabel: "Price (AUD)",
+		types: [
+			{
+				value: "service",
+				label: "Service"
+			},
+			{
+				value: "job",
+				label: "Job"
+			},
+			{
+				value: "consult",
+				label: "Advice"
+			},
+			{
+				value: "site_visit",
+				label: "Site visit"
+			},
+			{
+				value: "quoted_job",
+				label: "Quote"
+			}
+		],
+		streams: [
+			{
+				key: "hasBookings",
+				label: "Client jobs",
+				desc: "Work you do for a customer."
+			},
+			{
+				key: "hasPhysicalProducts",
+				label: "Goods",
+				desc: "Things you sell."
+			},
+			{
+				key: "hasDigitalProducts",
+				label: "Digital sales",
+				desc: "Downloads or online offers."
+			},
+			{
+				key: "hasContractors",
+				label: "Contractors",
+				desc: "People you pay per job."
+			},
+			{
+				key: "hasEmployees",
+				label: "Staff",
+				desc: "People on wages."
+			}
+		]
+	}
+];
+function industryById(id) {
+	if (!id) return INDUSTRIES.find((item) => item.id === "creator");
+	return INDUSTRIES.find((item) => item.id === id) ?? INDUSTRIES.find((item) => item.id === "general");
+}
+function bookingTypeLabel(type, moduleId) {
+	const preferred = industryById(moduleId).types.find((item) => item.value === type);
+	if (preferred) return preferred.label;
+	for (const industry of INDUSTRIES) {
+		const hit = industry.types.find((item) => item.value === type);
+		if (hit) return hit.label;
+	}
+	return type.replaceAll("_", " ");
+}
+/** One accent per industry. Creator keeps the talentOS violet. */
+var THEMES = {
+	creator: {
+		h: 272,
+		s: 62,
+		accent: "#7434d1"
+	},
+	trades: {
+		h: 18,
+		s: 86,
+		accent: "#c2410c"
+	},
+	professional: {
+		h: 221,
+		s: 76,
+		accent: "#1d4ed8"
+	},
+	health: {
+		h: 175,
+		s: 78,
+		accent: "#0f766e"
+	},
+	hospitality: {
+		h: 343,
+		s: 80,
+		accent: "#9f1239"
+	},
+	maker: {
+		h: 84,
+		s: 72,
+		accent: "#4d7c0f"
+	},
+	general: {
+		h: 215,
+		s: 28,
+		accent: "#334155"
 	}
 };
-/**
-* GST Turnover Calculation & Monitoring
-* ATO definition:
-* Current GST Turnover: Current month plus previous 11 months
-* Projected GST Turnover: Current month plus next 11 months
-*/
-function evaluateGSTTurnover(current12mTurnover, projected12mTurnover, isRegistered) {
-	const threshold = VERSIONED_RULES.GST_THRESHOLD.standardThreshold;
-	const isOverCurrent = current12mTurnover >= threshold;
-	const isOverProjected = projected12mTurnover >= threshold;
-	const isApproaching = current12mTurnover >= threshold * .85 || projected12mTurnover >= threshold * .85;
-	let status = "MONITOR";
-	let message = "";
-	if (isRegistered) {
-		status = "COMPLIANT";
-		message = "You are registered for GST. You must lodge BAS and charge 10% GST on taxable supplies.";
-	} else if (isOverCurrent || isOverProjected) {
-		status = "ACTION_REQUIRED";
-		message = `Your turnover (${formatAUD(Math.max(current12mTurnover, projected12mTurnover))}) has reached or projected to exceed the $75,000 threshold. You generally have 21 days to register for GST with the ATO.`;
-	} else if (isApproaching) {
-		status = "MONITOR";
-		message = `Your turnover is approaching the $75,000 GST threshold (${Math.round(current12mTurnover / threshold * 100)}% of threshold). Monitor projected deals.`;
-	} else {
-		status = "COMPLIANT";
-		message = `Current turnover (${formatAUD(current12mTurnover)}) is below the $75,000 registration threshold. Voluntary registration remains optional.`;
-	}
-	return {
-		status,
-		threshold,
-		current12mTurnover,
-		projected12mTurnover,
-		percentOfThreshold: Math.min(100, Math.round(current12mTurnover / threshold * 100)),
-		message,
-		sourceRef: VERSIONED_RULES.GST_THRESHOLD.sourceRef
-	};
+var STEPS = [
+	50,
+	100,
+	200,
+	300,
+	400,
+	500,
+	600,
+	700,
+	800,
+	900,
+	950
+];
+var LIGHTS = [
+	96,
+	91,
+	82,
+	72,
+	62,
+	50,
+	42,
+	34,
+	26,
+	18,
+	12
+];
+function hsl(h, s, l, a) {
+	const base = `${h} ${s}% ${l}%`;
+	return a === void 0 ? `hsl(${base})` : `hsl(${base} / ${a})`;
 }
-/**
-* Indicative Australian Individual Tax Calculation for Sole Traders / Director Drawings
-*/
-function estimateAustralianTax(taxableIncome, entityType) {
-	if (taxableIncome <= 0) return {
-		taxableIncome: 0,
-		grossTax: 0,
-		medicareLevy: 0,
-		totalEstimatedTax: 0,
-		effectiveRate: 0,
-		suggestedReserve: 0,
-		explanation: "No taxable net income recorded yet."
-	};
-	if (entityType === "company") {
-		const grossTax = taxableIncome * .25;
-		return {
-			taxableIncome,
-			grossTax,
-			medicareLevy: 0,
-			totalEstimatedTax: grossTax,
-			effectiveRate: 25,
-			suggestedReserve: grossTax,
-			explanation: "Calculated using Australian Base Rate Entity corporate tax rate (25%). Individual distributions may incur separate franking tax."
-		};
-	}
-	const brackets = VERSIONED_RULES.INDIVIDUAL_TAX_RATES_2026_27.brackets;
-	let grossTax = 0;
-	for (const b of brackets) if (taxableIncome > b.min) {
-		const taxableInBracket = Math.min(taxableIncome, b.max) - b.min;
-		grossTax = b.base + taxableInBracket * b.rate;
-	}
-	const medicareLevy = taxableIncome > 26e3 ? taxableIncome * VERSIONED_RULES.INDIVIDUAL_TAX_RATES_2026_27.medicareLevyRate : 0;
-	const totalEstimatedTax = grossTax + medicareLevy;
-	const effectiveRate = taxableIncome > 0 ? totalEstimatedTax / taxableIncome * 100 : 0;
-	return {
-		taxableIncome,
-		grossTax,
-		medicareLevy,
-		totalEstimatedTax,
-		effectiveRate: Math.round(effectiveRate * 10) / 10,
-		suggestedReserve: Math.ceil(totalEstimatedTax / 100) * 100,
-		explanation: "Calculated using 2026-2027 Australian resident individual tax brackets + 2% Medicare levy. Actual liability depends on personal offsets, HECS/HELP debt, and final accountant assessment."
-	};
+function industryAccent(id) {
+	if (id && id in THEMES) return THEMES[id].accent;
+	return THEMES.creator.accent;
 }
-/**
-* Worker Classification Test (Employee vs Contractor)
-* Implements ATO multi-factor decision assessment
-*/
-function evaluateWorkerClassification(factors) {
-	let contractorScore = 0;
-	if (factors.hasControlOverHoursAndWork) contractorScore++;
-	if (factors.providesOwnEquipment) contractorScore++;
-	if (factors.bearsCommercialRisk) contractorScore++;
-	if (factors.paidByDeliverableOrQuote) contractorScore++;
-	if (factors.canSubcontractOrDelegate) contractorScore++;
-	if (contractorScore >= 4) return {
-		classification: "LIKELY_INDEPENDENT_CONTRACTOR",
-		riskLevel: "LOW",
-		superObligation: "REVIEW - If contractor is engaged wholly or principally for their labour, Super Guarantee (12%) may still apply under SGAA 1992 s 12(3).",
-		paygObligation: "No PAYG withholding required if genuine contractor with valid Australian ABN quoted.",
-		tparObligation: "Review if services relate to IT, cleaning, courier, or building activities.",
-		recommendation: "Ensure a written Contractor Agreement is executed with an active ABN quoted before payment."
-	};
-	else if (contractorScore === 3) return {
-		classification: "BORDERLINE_NEEDS_REVIEW",
-		riskLevel: "MEDIUM",
-		superObligation: "High likelihood of Super Guarantee (12%) liability. ATO deems many individual workers statutory employees for super purposes.",
-		paygObligation: "Possible PAYG withholding requirement if terms resemble employment.",
-		tparObligation: "Check industry applicability.",
-		recommendation: "Borderline indicators. Consult your accountant or tax agent to avoid sham contracting penalties."
-	};
-	else return {
-		classification: "LIKELY_COMMON_LAW_EMPLOYEE",
-		riskLevel: "HIGH",
-		superObligation: "Mandatory: 12% Super Guarantee must be paid into the employee’s nominated super fund by quarterly due dates.",
-		paygObligation: "Mandatory: Must register for PAYG Withholding, collect TFN declaration, and report via Single Touch Payroll (STP).",
-		tparObligation: "Not applicable (reported via STP wages, not TPAR).",
-		recommendation: "Worker displays typical employment characteristics. Treat as an employee with PAYG withholding and Fair Work award compliance."
-	};
+/** Paint accent, brand gradient, and the remapped emerald/teal scales. */
+function applyIndustryTheme(id) {
+	if (typeof document === "undefined") return;
+	const key = id && id in THEMES ? id : "creator";
+	const theme = THEMES[key];
+	const root = document.documentElement;
+	const set = (name, value) => root.style.setProperty(name, value);
+	const dark = root.classList.contains("dark");
+	set("--color-accent", theme.accent);
+	set("--color-accent-strong", hsl(theme.h, theme.s, 32));
+	set("--color-accent-soft", hsl(theme.h, theme.s, 42, .14));
+	set("--color-cyan", hsl(theme.h, Math.min(theme.s, 72), 48));
+	set("--color-brand-cyan", hsl(theme.h, Math.min(theme.s, 70), 56));
+	set("--color-brand-blue", hsl(theme.h, theme.s, 46));
+	set("--color-brand-violet", theme.accent);
+	set("--color-brand-magenta", hsl((theme.h + 16) % 360, theme.s, 46));
+	set("--color-brand-pink", hsl((theme.h + 32) % 360, Math.min(theme.s, 78), 54));
+	set("--glow-a", hsl(theme.h, theme.s, 50, dark ? .16 : .1));
+	set("--glow-b", hsl((theme.h + 28) % 360, theme.s, 48, dark ? .14 : .09));
+	STEPS.forEach((step, index) => {
+		const tone = hsl(theme.h, theme.s, LIGHTS[index]);
+		set(`--color-emerald-${step}`, tone);
+		set(`--color-teal-${step}`, hsl(theme.h, Math.max(18, theme.s - 18), LIGHTS[index]));
+	});
+	set("--color-emerald-500", theme.accent);
+	set("--color-emerald-600", hsl(theme.h, theme.s, 40));
+	root.dataset.industry = key;
+	const bar = dark ? "#101218" : theme.accent;
+	document.querySelector("meta[name=\"theme-color\"]")?.setAttribute("content", bar);
 }
 var OnboardingModal = ({ isOpen, onClose, business, taxProfile, operatingProfile, creatorProfile, onSave }) => {
 	const [step, setStep] = (0, import_react.useState)(1);
@@ -336,8 +699,8 @@ var OnboardingModal = ({ isOpen, onClose, business, taxProfile, operatingProfile
 												className: "p-3 rounded-lg bg-neutral-900 border border-neutral-800",
 												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 													className: "text-emerald-400 font-semibold block mb-1",
-													children: "ABR Gated"
-												}), "Official ABN verification & 28-day detail change monitor."]
+													children: "ABN Lookup"
+												}), "Check a number on the public register. It does not lodge a return."]
 											}),
 											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 												className: "p-3 rounded-lg bg-neutral-900 border border-neutral-800",
@@ -350,8 +713,8 @@ var OnboardingModal = ({ isOpen, onClose, business, taxProfile, operatingProfile
 												className: "p-3 rounded-lg bg-neutral-900 border border-neutral-800",
 												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 													className: "text-emerald-400 font-semibold block mb-1",
-													children: "ATO / ASIC checks"
-												}), "Continuous monitoring of $75k GST threshold & company reviews."]
+													children: "Tax from your books"
+												}), "GST threshold and BAS dates from what you record. Lodging stays with you or your agent."]
 											})
 										]
 									})
@@ -395,12 +758,30 @@ var OnboardingModal = ({ isOpen, onClose, business, taxProfile, operatingProfile
 										className: "text-xs text-rose-400 mt-1",
 										children: abnValidation.error
 									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 										className: "text-xs text-neutral-400 mt-1",
-										children: ["Try test ABN: ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", {
-											className: "text-neutral-300 font-mono",
-											children: "51 824 753 556"
-										})]
+										children: "51 824 753 556 is a real ABN, the Tax Office, so you can see a live result. Use your own number for your books."
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: "mt-3",
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(AbnCheck, {
+											abn: abnInput,
+											booksName: formData.legalName,
+											onUse: (hit) => {
+												setFormData((prev) => ({
+													...prev,
+													legalName: hit.legalName || prev.legalName,
+													entityType: hit.entityType ?? prev.entityType,
+													businessAddress: hit.location || prev.businessAddress,
+													abnLastVerifiedAt: hit.checkedAt,
+													abrLastCheckedAt: hit.checkedAt
+												}));
+												setTaxData((prev) => ({
+													...prev,
+													gstRegistered: hit.gstRegistered
+												}));
+											}
+										})
 									})
 								] }),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -517,7 +898,7 @@ var OnboardingModal = ({ isOpen, onClose, business, taxProfile, operatingProfile
 											className: "w-full px-3 py-2 bg-neutral-950 border border-neutral-700 rounded-lg text-white focus:border-emerald-500 focus:outline-none",
 											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
 												value: "cash",
-												children: "Cash Basis (Recommended for creators)"
+												children: "Cash basis (usual for sole traders)"
 											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
 												value: "accruals",
 												children: "Accruals / Non-Cash"
@@ -613,74 +994,86 @@ var OnboardingModal = ({ isOpen, onClose, business, taxProfile, operatingProfile
 						}),
 						step === 4 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 							className: "space-y-4",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-								className: "text-xs text-neutral-400",
-								children: "Configure your active revenue streams and operational touchpoints to customize your compliance radar:"
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "grid grid-cols-1 sm:grid-cols-2 gap-3",
-								children: [
-									{
-										key: "hasBookings",
-										label: "Brand Deals & Sponsored Campaigns",
-										desc: "Invoicing brands and agencies for posts, UGC, appearances"
-									},
-									{
-										key: "hasPlatformPayouts",
-										label: "Platform Payouts",
-										desc: "YouTube, OnlyFans, Patreon, TikTok Creator Rewards"
-									},
-									{
-										key: "hasDigitalProducts",
-										label: "Digital Products & Presets",
-										desc: "Lightroom presets, eBooks, digital guides"
-									},
-									{
-										key: "hasPhysicalProducts",
-										label: "Physical Merch & Products",
-										desc: "Apparel, prints, physical accessories"
-									},
-									{
-										key: "hasContractors",
-										label: "Engages Contractors",
-										desc: "Videographers, editors, assistants, makeup artists"
-									},
-									{
-										key: "hasEmployees",
-										label: "Employs Staff",
-										desc: "Full-time or casual employees on wages"
-									}
-								].map(({ key, label, desc }) => {
-									const val = opData[key];
-									return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										onClick: () => setOpData({
-											...opData,
-											[key]: !val
-										}),
-										className: `p-3.5 rounded-xl border cursor-pointer transition-colors ${val ? "bg-emerald-950/20 border-emerald-500/40 text-white" : "bg-neutral-900 border-neutral-800 text-neutral-400 hover:border-neutral-700"}`,
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "flex items-center justify-between mb-1",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "text-xs font-semibold uppercase tracking-wider text-neutral-300",
+									children: "Industry module"
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "mt-1 text-xs text-neutral-400",
+									children: "This sets the job types, and the app colour. Any Australian sole trader can use the books. Pick the closest trade."
+								})] }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "grid grid-cols-1 gap-2 sm:grid-cols-2",
+									children: INDUSTRIES.map((item) => {
+										const selected = industryById(opData.industryModule).id === item.id;
+										return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											type: "button",
+											onClick: () => {
+												applyIndustryTheme(item.id);
+												setOpData((prev) => ({
+													...prev,
+													industryModule: item.id,
+													hasBookings: true,
+													hasPlatformPayouts: item.id === "creator" ? prev.hasPlatformPayouts : false,
+													hasDigitalProducts: item.id === "creator" || item.id === "maker" || item.id === "health" ? prev.hasDigitalProducts : false,
+													hasPhysicalProducts: item.id === "creator" || item.id === "trades" || item.id === "maker" || item.id === "hospitality" ? prev.hasPhysicalProducts : false,
+													hasSubscriptions: item.id === "professional" ? prev.hasSubscriptions : false,
+													hasAffiliateIncome: false
+												}));
+											},
+											className: `flex items-start gap-2 rounded-xl border p-3 text-left ${selected ? "border-accent bg-accent-soft" : "border-neutral-800 bg-neutral-900 hover:border-neutral-700"}`,
 											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "font-semibold text-sm text-neutral-100",
-												children: label
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-												type: "checkbox",
-												checked: val,
-												readOnly: true,
-												className: "rounded text-emerald-600 focus:ring-0 bg-neutral-800 border-neutral-700"
+												className: "mt-1 h-3 w-3 shrink-0 rounded-full",
+												style: { background: industryAccent(item.id) }
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "block text-sm font-semibold text-white",
+												children: item.label
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "mt-0.5 block text-xs text-neutral-400",
+												children: item.blurb
+											})] })]
+										}, item.id);
+									})
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "text-xs text-neutral-400",
+									children: "What you actually sell. Turn on only what applies."
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "grid grid-cols-1 sm:grid-cols-2 gap-3",
+									children: industryById(opData.industryModule).streams.map(({ key, label, desc }) => {
+										const val = Boolean(opData[key]);
+										return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											onClick: () => setOpData({
+												...opData,
+												[key]: !val
+											}),
+											className: `p-3.5 rounded-xl border cursor-pointer transition-colors ${val ? "bg-emerald-950/20 border-emerald-500/40 text-white" : "bg-neutral-900 border-neutral-800 text-neutral-400 hover:border-neutral-700"}`,
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "flex items-center justify-between mb-1",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+													className: "font-semibold text-sm text-neutral-100",
+													children: label
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+													type: "checkbox",
+													checked: val,
+													readOnly: true,
+													className: "rounded text-emerald-600 focus:ring-0 bg-neutral-800 border-neutral-700"
+												})]
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+												className: "text-xs text-neutral-400",
+												children: desc
 											})]
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-											className: "text-xs text-neutral-400",
-											children: desc
-										})]
-									}, key);
+										}, key);
+									})
 								})
-							})]
+							]
 						}),
 						step === 5 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 							className: "space-y-4",
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 								className: "text-xs text-neutral-400",
-								children: "TalentOS separates operating funds from tax escrow to protect creators from surprise tax liabilities:"
+								children: "There is no live bank feed. Money you record — invoices paid, expenses, and payouts — lands in an operating account kept in this browser."
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 								className: "space-y-3",
 								children: [
@@ -693,14 +1086,14 @@ var OnboardingModal = ({ isOpen, onClose, business, taxProfile, operatingProfile
 												children: "UP"
 											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 												className: "font-semibold text-white",
-												children: "Up Bank / Everyday Business"
+												children: "Operating account"
 											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-												className: "text-xs text-neutral-400 font-mono",
-												children: "BSB 633-123 · Acc •••• 4920"
+												className: "text-xs text-neutral-400",
+												children: "Created in your books. It is not linked to a bank."
 											})] })]
 										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "text-xs text-emerald-400 font-medium",
-											children: "Connected"
+											className: "text-xs text-neutral-400 font-medium",
+											children: "Not connected"
 										})]
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -712,14 +1105,14 @@ var OnboardingModal = ({ isOpen, onClose, business, taxProfile, operatingProfile
 												children: "CBA"
 											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 												className: "font-semibold text-white",
-												children: "CommBank / Tax & GST Reserve"
+												children: "Tax reserve"
 											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-												className: "text-xs text-neutral-400 font-mono",
-												children: "BSB 062-111 · Acc •••• 8812"
+												className: "text-xs text-neutral-400",
+												children: "Set aside in the books. Not a bank account we can move."
 											})] })]
 										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "text-xs text-emerald-400 font-medium",
-											children: "Connected"
+											className: "text-xs text-neutral-400 font-medium",
+											children: "In your books"
 										})]
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -731,14 +1124,14 @@ var OnboardingModal = ({ isOpen, onClose, business, taxProfile, operatingProfile
 												children: "S"
 											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 												className: "font-semibold text-white",
-												children: "Stripe / Platform Connect"
+												children: "Card and platform sales"
 											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 												className: "text-xs text-neutral-400",
-												children: "Card processing & digital sales"
+												children: "Record a payout or a shop sale when the money arrives."
 											})] })]
 										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "text-xs text-emerald-400 font-medium",
-											children: "Active"
+											className: "text-xs text-neutral-400 font-medium",
+											children: "Manual"
 										})]
 									})
 								]
@@ -754,11 +1147,11 @@ var OnboardingModal = ({ isOpen, onClose, business, taxProfile, operatingProfile
 								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 									className: "text-xs text-neutral-300 leading-relaxed",
 									children: [
-										"Based on your ABN profile (",
-										formData.abn,
-										") and entity structure (",
-										formData.entityType === "company" ? "Proprietary Company" : "Sole Trader",
-										"), TalentOS has activated your Australian compliance radar."
+										"Based on your ABN (",
+										formData.abn || "not entered yet",
+										") as a sole trader in ",
+										industryById(opData.industryModule).label,
+										", TalentOS has set up your books. Lodging stays with you or your agent."
 									]
 								})]
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -834,6 +1227,13 @@ var OnboardingModal = ({ isOpen, onClose, business, taxProfile, operatingProfile
 		})
 	});
 };
+/** Whole days from the real today until an ISO date. Negative means overdue. */
+function calendarDaysUntil(iso) {
+	const due = new Date(iso.length <= 10 ? `${iso}T00:00:00` : iso);
+	const now = /* @__PURE__ */ new Date();
+	const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+	return Math.round((due.getTime() - start.getTime()) / 864e5);
+}
 /** Past-due issued invoices read as overdue even if the stored status was not rewritten. */
 function shownInvoiceStatus(status, due) {
 	const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
@@ -946,7 +1346,7 @@ var STEP_STYLE = {
 		badge: "bg-ok/12 text-ok ring-ok/25"
 	}
 };
-var HomeDashboard = ({ business, creator, taxProfile, clients, bookings, invoices, payouts, expenses, bankAccounts, basPeriod, obligations, onNavigate, onOpenQuickAdd, onOpenAssistant }) => {
+var HomeDashboard = ({ business, creator, taxProfile, clients, bookings, invoices, payouts, expenses, bankAccounts, basPeriod, obligations, onNavigate, onOpenQuickAdd, onOpenAssistant, industryModule }) => {
 	const totalCashBalance = bankAccounts.reduce((acc, b) => acc + b.balance, 0);
 	const taxReserveBalance = bankAccounts.find((b) => b.type === "tax_reserve")?.balance || 0;
 	const operatingBalance = totalCashBalance - taxReserveBalance;
@@ -1016,7 +1416,7 @@ var HomeDashboard = ({ business, creator, taxProfile, clients, bookings, invoice
 		tone: ob.status === "ACTION_REQUIRED" ? "alert" : "warn",
 		rank: (ob.status === "ACTION_REQUIRED" ? TONE_RANK.alert : TONE_RANK.warn) + .5 + idx * .01,
 		title: ob.title,
-		detail: ob.summary,
+		detail: ob.dueDate ? ob.summary.replace(/Due in \d+ days/, `Due in ${calendarDaysUntil(ob.dueDate)} days`) : ob.summary,
 		ctaLabel: "Review",
 		tab: "compliance"
 	}));
@@ -1055,6 +1455,7 @@ var HomeDashboard = ({ business, creator, taxProfile, clients, bookings, invoice
 			color: "amber"
 		}
 	];
+	const trade = industryById(industryModule);
 	const hour = (/* @__PURE__ */ new Date()).getHours();
 	const hello = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 	const firstName = creator.creatorHandle.replace("@", "") || "there";
@@ -1064,7 +1465,7 @@ var HomeDashboard = ({ business, creator, taxProfile, clients, bookings, invoice
 			done: Boolean(business.tradingName && business.abn)
 		},
 		{
-			label: "First booking",
+			label: `First ${trade.jobNoun.toLowerCase()}`,
 			done: bookings.length > 0
 		},
 		{
@@ -1084,11 +1485,10 @@ var HomeDashboard = ({ business, creator, taxProfile, clients, bookings, invoice
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-mono text-muted",
 						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: creator.creatorHandle }),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+							creator.creatorHandle ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: creator.creatorHandle }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 								"aria-hidden": "true",
 								children: "·"
-							}),
+							})] }) : null,
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 								className: "font-semibold text-accent",
 								children: business.tradingName
@@ -1119,7 +1519,11 @@ var HomeDashboard = ({ business, creator, taxProfile, clients, bookings, invoice
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 							onClick: () => onOpenQuickAdd("booking"),
 							className: "inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-neutral-700/60 bg-neutral-900 px-3.5 py-2 text-xs font-semibold text-ink transition-colors hover:bg-neutral-800 sm:w-auto",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "h-3.5 w-3.5" }), " New booking"]
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "h-3.5 w-3.5" }),
+								" New ",
+								trade.jobNoun.toLowerCase()
+							]
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 							onClick: () => onOpenQuickAdd("invoice"),
@@ -1352,7 +1756,7 @@ var HomeDashboard = ({ business, creator, taxProfile, clients, bookings, invoice
 													}),
 													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 														className: "capitalize",
-														children: b.bookingType.replace("_", " ")
+														children: bookingTypeLabel(b.bookingType, industryModule)
 													})
 												]
 											}),
@@ -1440,7 +1844,7 @@ var HomeDashboard = ({ business, creator, taxProfile, clients, bookings, invoice
 										})]
 									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 										className: "mt-0.5 line-clamp-2 block text-[11px] text-muted",
-										children: ob.summary
+										children: ob.dueDate ? ob.summary.replace(/Due in \d+ days/, `Due in ${calendarDaysUntil(ob.dueDate)} days`) : ob.summary
 									})]
 								})]
 							}, ob.id);
@@ -1500,24 +1904,34 @@ var HomeDashboard = ({ business, creator, taxProfile, clients, bookings, invoice
 		]
 	});
 };
-var BookingsView = ({ clients, bookings, quotes, taxProfile, onAddBooking, onAddClient, onConvertToInvoice, onConvertQuoteToInvoice, onUpdateBookingStatus }) => {
+var BookingsView = ({ clients, bookings, quotes, taxProfile, onAddBooking, onAddClient, onAddQuote, onConvertToInvoice, onConvertQuoteToInvoice, onUpdateBookingStatus, launchToken = 0, industryModule }) => {
+	const trade = industryById(industryModule);
 	const [activeTab, setActiveTab] = (0, import_react.useState)("bookings");
 	const [showAddBookingModal, setShowAddBookingModal] = (0, import_react.useState)(false);
+	(0, import_react.useEffect)(() => {
+		if (launchToken > 0) {
+			setActiveTab("bookings");
+			setShowAddBookingModal(true);
+		}
+	}, [launchToken]);
 	const [showAddClientModal, setShowAddClientModal] = (0, import_react.useState)(false);
 	const [selectedBooking, setSelectedBooking] = (0, import_react.useState)(null);
 	const [newCampaignName, setNewCampaignName] = (0, import_react.useState)("");
 	const [newClientId, setNewClientId] = (0, import_react.useState)(clients[0]?.id || "");
-	const [newBookingType, setNewBookingType] = (0, import_react.useState)("campaign");
+	const [newBookingType, setNewBookingType] = (0, import_react.useState)(trade.types[0].value);
+	(0, import_react.useEffect)(() => {
+		if (!trade.types.some((item) => item.value === newBookingType)) setNewBookingType(trade.types[0].value);
+	}, [trade, newBookingType]);
 	const [newStartDate, setNewStartDate] = (0, import_react.useState)("");
 	const [newEndDate, setNewEndDate] = (0, import_react.useState)("");
-	const [newLocation, setNewLocation] = (0, import_react.useState)("Sydney Studio / Remote");
+	const [newLocation, setNewLocation] = (0, import_react.useState)(industryById(industryModule).id === "creator" ? "Sydney Studio / Remote" : "");
 	const [newFee, setNewFee] = (0, import_react.useState)(0);
 	const [newDeliverableInput, setNewDeliverableInput] = (0, import_react.useState)("");
-	const [newDeliverables, setNewDeliverables] = (0, import_react.useState)([
+	const [newDeliverables, setNewDeliverables] = (0, import_react.useState)(() => industryById(industryModule).id === "creator" ? [
 		"1x Dedicated 60s Reel (IG/TikTok)",
 		"3x In-feed Story Frames with link",
 		"30-day organic digital usage rights"
-	]);
+	] : []);
 	const handleAddDeliverable = () => {
 		if (!newDeliverableInput.trim()) return;
 		setNewDeliverables([...newDeliverables, newDeliverableInput.trim()]);
@@ -1571,7 +1985,11 @@ var BookingsView = ({ clients, bookings, quotes, taxProfile, onAddBooking, onAdd
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 							onClick: () => setActiveTab("bookings"),
 							className: `px-3.5 py-1.5 font-medium rounded-lg transition-colors flex items-center gap-1.5 ${activeTab === "bookings" ? "bg-neutral-800 text-white shadow-sm" : "text-neutral-400 hover:text-neutral-200"}`,
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Calendar, { className: "w-3.5 h-3.5 text-emerald-400" }), "Bookings Pipeline"]
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Calendar, { className: "w-3.5 h-3.5 text-emerald-400" }),
+								trade.jobNoun,
+								"s"
+							]
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 							onClick: () => setActiveTab("clients"),
@@ -1598,7 +2016,13 @@ var BookingsView = ({ clients, bookings, quotes, taxProfile, onAddBooking, onAdd
 						className: "flex items-center justify-between",
 						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 							className: "text-xs text-neutral-400",
-							children: [bookings.length, " active deals in your production pipeline"]
+							children: [
+								bookings.length,
+								" ",
+								trade.jobNoun.toLowerCase(),
+								bookings.length === 1 ? "" : "s",
+								" in the pipeline"
+							]
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 							onClick: () => {
 								if (clients.length === 0) {
@@ -1609,7 +2033,11 @@ var BookingsView = ({ clients, bookings, quotes, taxProfile, onAddBooking, onAdd
 								setShowAddBookingModal(true);
 							},
 							className: "px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-[#fff] shadow-lg shadow-emerald-600/20 flex items-center gap-1.5 transition-all",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "w-3.5 h-3.5" }), " New Booking"]
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "w-3.5 h-3.5" }),
+								" New ",
+								trade.jobNoun
+							]
 						})]
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
@@ -1698,7 +2126,7 @@ var BookingsView = ({ clients, bookings, quotes, taxProfile, onAddBooking, onAdd
 									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 											className: "text-[10px] text-neutral-400 font-mono",
-											children: "Gross Campaign Fee"
+											children: trade.feeLabel
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 											className: "text-xl font-bold text-white tabular-nums",
@@ -1807,74 +2235,16 @@ var BookingsView = ({ clients, bookings, quotes, taxProfile, onAddBooking, onAdd
 					}, client.id))
 				})]
 			}),
-			activeTab === "quotes" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "space-y-4",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "p-4 rounded-xl bg-neutral-900 border border-neutral-800 text-xs text-neutral-400",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Australian Regulatory Rule:" }), " A quote is an offer and must not silently become an invoice. When accepted, use the 1-click convert button to generate an official Tax Invoice."]
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-					className: "space-y-3",
-					children: quotes.map((q) => {
-						const client = clients.find((c) => c.id === q.clientId);
-						return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "p-5 rounded-2xl bg-neutral-900 border border-neutral-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "flex items-center gap-2 text-xs text-neutral-400 mb-1",
-									children: [
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "font-mono text-white",
-											children: q.quoteNumber
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											"aria-hidden": "true",
-											children: "·"
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: ["To: ", client?.tradingName] }),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											"aria-hidden": "true",
-											children: "·"
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: ["Issued: ", q.issueDate] }),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											"aria-hidden": "true",
-											children: "·"
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: ["Valid until: ", q.expiryDate] })
-									]
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "text-sm font-semibold text-white",
-									children: ["Usage rights: ", q.usageRights]
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "text-xs text-neutral-400 mt-1",
-									children: ["Exclusivity terms: ", q.exclusivity]
-								})
-							] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "text-right sm:shrink-0 flex sm:flex-col items-center sm:items-end justify-between gap-2",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: "text-lg font-bold text-white tabular-nums",
-									children: formatAUD(q.total)
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "text-[10px] text-neutral-400 font-mono",
-									children: [
-										"(Includes ",
-										formatAUD(q.gstAmount),
-										" GST)"
-									]
-								})] }), q.status === "converted" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-									className: "text-xs font-semibold text-ok",
-									children: "Already invoiced"
-								}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-									onClick: () => onConvertQuoteToInvoice(q),
-									className: "px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-[#fff] font-medium text-xs transition-colors flex items-center gap-1",
-									children: ["Convert to Tax Invoice ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowRight, { className: "w-3 h-3" })]
-								})]
-							})]
-						}, q.id);
-					})
-				})]
+			activeTab === "quotes" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(QuotesPanel, {
+				quotes,
+				clients,
+				taxProfile,
+				onConvertQuoteToInvoice,
+				onAddQuote,
+				onNeedClient: () => {
+					setActiveTab("clients");
+					setShowAddClientModal(true);
+				}
 			}),
 			showAddBookingModal && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 				className: "fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md",
@@ -1882,9 +2252,9 @@ var BookingsView = ({ clients, bookings, quotes, taxProfile, onAddBooking, onAdd
 					className: "w-full max-w-lg bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl p-6 text-sm text-neutral-200 space-y-4",
 					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "flex items-center justify-between pb-3 border-b border-neutral-800",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h3", {
 							className: "font-semibold text-white text-base",
-							children: "New Campaign Booking"
+							children: ["New ", trade.jobNoun.toLowerCase()]
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 							onClick: () => setShowAddBookingModal(false),
 							className: "text-neutral-400 hover:text-white",
@@ -1896,11 +2266,11 @@ var BookingsView = ({ clients, bookings, quotes, taxProfile, onAddBooking, onAdd
 						children: [
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
 								className: "block text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-1",
-								children: "Campaign / Deal Title"
+								children: trade.titleLabel
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
 								type: "text",
 								required: true,
-								placeholder: "e.g. Summer Activewear UGC Reels Series",
+								placeholder: trade.titlePlaceholder,
 								value: newCampaignName,
 								onChange: (e) => setNewCampaignName(e.target.value),
 								className: "w-full px-3 py-2 bg-neutral-950 border border-neutral-700 rounded-lg text-white focus:outline-none focus:border-emerald-500"
@@ -1909,7 +2279,7 @@ var BookingsView = ({ clients, bookings, quotes, taxProfile, onAddBooking, onAdd
 								className: "grid grid-cols-2 gap-3",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
 									className: "block text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-1",
-									children: "Client Brand"
+									children: trade.clientLabel
 								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
 									value: newClientId,
 									onChange: (e) => setNewClientId(e.target.value),
@@ -1921,36 +2291,14 @@ var BookingsView = ({ clients, bookings, quotes, taxProfile, onAddBooking, onAdd
 								})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
 									className: "block text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-1",
 									children: "Booking Type"
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
 									value: newBookingType,
 									onChange: (e) => setNewBookingType(e.target.value),
 									className: "w-full px-3 py-2 bg-neutral-950 border border-neutral-700 rounded-lg text-white focus:outline-none focus:border-emerald-500",
-									children: [
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-											value: "campaign",
-											children: "Full Campaign"
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-											value: "ugc",
-											children: "UGC (User Generated Content)"
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-											value: "paid_post",
-											children: "Paid Post / Reel"
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-											value: "event_appearance",
-											children: "Event / Personal Appearance"
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-											value: "modelling",
-											children: "Modelling & Stills"
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-											value: "licensing",
-											children: "Content Licensing"
-										})
-									]
+									children: trade.types.map((item) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+										value: item.value,
+										children: item.label
+									}, item.value))
 								})] })]
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -1975,7 +2323,7 @@ var BookingsView = ({ clients, bookings, quotes, taxProfile, onAddBooking, onAdd
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
 								className: "block text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-1",
-								children: "Gross Creator Fee (AUD)"
+								children: trade.feeLabel
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
 								type: "number",
 								required: true,
@@ -2171,10 +2519,172 @@ var BookingsView = ({ clients, bookings, quotes, taxProfile, onAddBooking, onAdd
 		]
 	});
 };
-var SalesView = ({ products, orders, payouts, taxProfile, onAddProduct, onAddPayout }) => {
+function QuotesPanel({ quotes, clients, taxProfile, onConvertQuoteToInvoice, onAddQuote, onNeedClient }) {
+	const [open, setOpen] = (0, import_react.useState)(false);
+	const [clientId, setClientId] = (0, import_react.useState)(clients[0]?.id ?? "");
+	const [detail, setDetail] = (0, import_react.useState)("");
+	const [amount, setAmount] = (0, import_react.useState)("");
+	const save = (e) => {
+		e.preventDefault();
+		const subtotal = Math.round((Number(amount) || 0) * 100) / 100;
+		if (!onAddQuote || !clientId || !detail.trim() || subtotal <= 0) return;
+		const gst = taxProfile.gstRegistered ? Math.round(subtotal * .1 * 100) / 100 : 0;
+		const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+		const expiry = new Date(Date.now() + 12096e5).toISOString().slice(0, 10);
+		const n = quotes.length + 1;
+		onAddQuote({
+			id: `qte-${Date.now()}`,
+			quoteNumber: `QTE-${today.slice(0, 4)}-${String(n).padStart(3, "0")}`,
+			clientId,
+			issueDate: today,
+			expiryDate: expiry,
+			deliverables: [detail.trim()],
+			usageRights: "",
+			exclusivity: "",
+			subtotal,
+			gstAmount: gst,
+			total: Math.round((subtotal + gst) * 100) / 100,
+			status: "sent",
+			terms: "This is a quote, not an invoice. It is valid for 14 days."
+		});
+		setDetail("");
+		setAmount("");
+		setOpen(false);
+	};
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "space-y-4",
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "flex items-center justify-between gap-3",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+					className: "text-xs text-neutral-400",
+					children: "A quote is an offer. It becomes an invoice only when you convert it."
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+					type: "button",
+					onClick: () => clients.length ? setOpen(true) : onNeedClient(),
+					className: "shrink-0 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-[#fff] hover:bg-emerald-500",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "mr-1 inline h-3.5 w-3.5" }), " New quote"]
+				})]
+			}),
+			open && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", {
+				onSubmit: save,
+				className: "space-y-3 rounded-2xl border border-neutral-800 bg-neutral-900 p-4",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "grid gap-3 sm:grid-cols-3",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+							className: "text-xs text-neutral-400",
+							children: ["Client", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
+								value: clientId,
+								onChange: (e) => setClientId(e.target.value),
+								className: "mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-white",
+								children: clients.map((c) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+									value: c.id,
+									children: c.tradingName || c.legalName
+								}, c.id))
+							})]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+							className: "text-xs text-neutral-400 sm:col-span-2",
+							children: ["What it is for", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+								required: true,
+								value: detail,
+								onChange: (e) => setDetail(e.target.value),
+								className: "mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-white"
+							})]
+						})]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+						className: "block text-xs text-neutral-400",
+						children: ["Price, excluding GST", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+							required: true,
+							type: "number",
+							min: "0",
+							step: "0.01",
+							value: amount,
+							onChange: (e) => setAmount(e.target.value),
+							className: "mt-1 w-full max-w-xs rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-white"
+						})]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex gap-2",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+							type: "submit",
+							className: "rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-[#fff]",
+							children: "Save quote"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+							type: "button",
+							onClick: () => setOpen(false),
+							className: "rounded-lg px-4 py-2 text-xs text-neutral-400",
+							children: "Cancel"
+						})]
+					})
+				]
+			}),
+			quotes.length === 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+				className: "text-sm text-neutral-500",
+				children: "No quotes yet."
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "space-y-3",
+				children: quotes.map((q) => {
+					const client = clients.find((c) => c.id === q.clientId);
+					return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex flex-col justify-between gap-4 rounded-2xl border border-neutral-800 bg-neutral-900 p-5 sm:flex-row sm:items-center",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "mb-1 flex flex-wrap items-center gap-2 text-xs text-neutral-400",
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+										className: "font-mono text-white",
+										children: q.quoteNumber
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: ["To: ", client?.tradingName || "Client"] }),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: ["Valid until ", q.expiryDate] })
+								]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "text-sm font-semibold text-white",
+								children: q.deliverables.filter(Boolean).join(" · ") || "Quote"
+							}),
+							q.usageRights ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "mt-1 text-xs text-neutral-400",
+								children: ["Usage: ", q.usageRights]
+							}) : null,
+							q.exclusivity ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "text-xs text-neutral-400",
+								children: q.exclusivity
+							}) : null
+						] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-center justify-between gap-2 sm:flex-col sm:items-end",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "text-lg font-bold tabular-nums text-white",
+								children: formatAUD(q.total)
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "font-mono text-[10px] text-neutral-400",
+								children: q.gstAmount ? `Includes ${formatAUD(q.gstAmount)} GST` : "No GST"
+							})] }), q.status === "converted" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: "text-xs font-semibold text-ok",
+								children: "Already invoiced"
+							}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+								onClick: () => onConvertQuoteToInvoice(q),
+								className: "flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-[#fff] hover:bg-emerald-500",
+								children: ["Convert to tax invoice ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArrowRight, { className: "h-3 w-3" })]
+							})]
+						})]
+					}, q.id);
+				})
+			})
+		]
+	});
+}
+var SalesView = ({ products, orders, payouts, taxProfile, onAddProduct, onAddPayout, onAddOrder }) => {
 	const [activeTab, setActiveTab] = (0, import_react.useState)("payouts");
 	const [showAddProductModal, setShowAddProductModal] = (0, import_react.useState)(false);
 	const [showAddPayoutModal, setShowAddPayoutModal] = (0, import_react.useState)(false);
+	const [showSaleModal, setShowSaleModal] = (0, import_react.useState)(false);
+	const [saleProductId, setSaleProductId] = (0, import_react.useState)(products[0]?.id ?? "");
+	const [saleCustomer, setSaleCustomer] = (0, import_react.useState)("");
+	const [saleEmail, setSaleEmail] = (0, import_react.useState)("");
 	const [payoutPlatform, setPayoutPlatform] = (0, import_react.useState)("OnlyFans");
 	const [payoutGross, setPayoutGross] = (0, import_react.useState)(5e3);
 	const [payoutPlatformCutPct, setPayoutPlatformCutPct] = (0, import_react.useState)(20);
@@ -2225,6 +2735,32 @@ var SalesView = ({ products, orders, payouts, taxProfile, onAddProduct, onAddPay
 		setShowAddProductModal(false);
 		setNewProdName("");
 		setNewProdSku("");
+	};
+	const handleSaveSale = (e) => {
+		e.preventDefault();
+		const product = products.find((p) => p.id === saleProductId);
+		if (!product || !saleCustomer.trim()) return;
+		const registered = taxProfile.gstRegistered;
+		const total = product.gstInclusive || !registered ? product.price : Math.round(product.price * 1.1 * 100) / 100;
+		const gst = registered ? Math.round(total / 11 * 100) / 100 : 0;
+		const subtotal = Math.round((total - gst) * 100) / 100;
+		onAddOrder({
+			id: `ord-${Date.now()}`,
+			orderNumber: `ORD-${String(orders.length + 1).padStart(4, "0")}`,
+			customerName: saleCustomer.trim(),
+			customerEmail: saleEmail.trim() || "customer@email.com",
+			channel: "storefront",
+			date: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
+			subtotal,
+			gstAmount: gst,
+			shipping: 0,
+			total,
+			status: "completed",
+			itemsSummary: product.name
+		}, product.id);
+		setShowSaleModal(false);
+		setSaleCustomer("");
+		setSaleEmail("");
 	};
 	const totalGrossPayouts = payouts.reduce((acc, p) => acc + p.grossRevenue, 0);
 	const totalNetPayouts = payouts.reduce((acc, p) => acc + p.netPayout, 0);
@@ -2282,7 +2818,7 @@ var SalesView = ({ products, orders, payouts, taxProfile, onAddProduct, onAddPay
 								children: [
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 										className: "text-xs text-neutral-400",
-										children: "Total Gross Fan Revenue"
+										children: "Gross before fees"
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 										className: "text-2xl font-bold text-white tabular-nums mt-1",
@@ -2290,7 +2826,7 @@ var SalesView = ({ products, orders, payouts, taxProfile, onAddProduct, onAddPay
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 										className: "text-[11px] text-neutral-400 mt-1",
-										children: "Direct from subscribers & viewers"
+										children: "Before platform or card fees"
 									})
 								]
 							}),
@@ -2324,7 +2860,7 @@ var SalesView = ({ products, orders, payouts, taxProfile, onAddProduct, onAddPay
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 										className: "text-[11px] text-neutral-400 mt-1",
-										children: "Reconciled into Up Bank / CBA"
+										children: "Recorded in the operating account"
 									})
 								]
 							})
@@ -2423,102 +2959,130 @@ var SalesView = ({ products, orders, payouts, taxProfile, onAddProduct, onAddPay
 					})
 				]
 			}),
-			activeTab === "orders" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+			activeTab === "orders" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: "space-y-4",
-				children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-					className: "p-5 rounded-2xl bg-neutral-900 border border-neutral-800",
-					children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "overflow-x-auto",
-						children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
-							className: "w-full text-left text-xs",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-								className: "border-b border-neutral-800 text-neutral-400 uppercase tracking-wider font-mono text-[10px]",
-								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3",
-										children: "Order #"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3",
-										children: "Date"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3",
-										children: "Customer"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3",
-										children: "Items"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3 text-right",
-										children: "Subtotal"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3 text-right",
-										children: "GST"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3 text-right",
-										children: "Total AUD"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2.5 px-3 text-center",
-										children: "Status"
-									})
-								]
-							}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", {
-								className: "divide-y divide-neutral-800/60 text-neutral-200",
-								children: orders.map((o) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-									className: "hover:bg-neutral-800/30 transition-colors",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex items-center justify-between gap-3",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+							className: "text-xs text-neutral-400",
+							children: "Shop sales land in the operating account and the ledger."
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+							type: "button",
+							onClick: () => {
+								setSaleProductId(products[0]?.id ?? "");
+								setShowSaleModal(true);
+							},
+							disabled: products.length === 0,
+							className: "px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-[#fff] shadow-lg shadow-emerald-600/20 flex items-center gap-1.5 transition-all disabled:opacity-40",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "w-3.5 h-3.5" }), " Record a sale"]
+						})]
+					}),
+					orders.length === 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "rounded-2xl border border-neutral-800 bg-neutral-900 p-8 text-center",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+							className: "font-display text-lg font-bold text-white",
+							children: "No shop sales yet"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+							className: "mt-1 text-sm text-neutral-400",
+							children: "Add a product, then record the sale here."
+						})]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "p-5 rounded-2xl bg-neutral-900 border border-neutral-800",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							className: "overflow-x-auto",
+							children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
+								className: "w-full text-left text-xs",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+									className: "border-b border-neutral-800 text-neutral-400 uppercase tracking-wider font-mono text-[10px]",
 									children: [
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "py-3 px-3 font-mono font-semibold text-white",
-											children: o.orderNumber
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+											className: "py-2.5 px-3",
+											children: "Order #"
 										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "py-3 px-3 font-mono text-neutral-400",
-											children: o.date
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+											className: "py-2.5 px-3",
+											children: "Date"
 										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-											className: "py-3 px-3",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-												className: "font-medium text-white",
-												children: o.customerName
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-												className: "text-[11px] text-neutral-400",
-												children: o.customerEmail
-											})]
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+											className: "py-2.5 px-3",
+											children: "Customer"
 										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "py-3 px-3 text-neutral-300 max-w-xs truncate",
-											children: o.itemsSummary
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+											className: "py-2.5 px-3",
+											children: "Items"
 										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "py-3 px-3 text-right tabular-nums",
-											children: formatAUD(o.subtotal)
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+											className: "py-2.5 px-3 text-right",
+											children: "Subtotal"
 										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "py-3 px-3 text-right tabular-nums text-emerald-400",
-											children: formatAUD(o.gstAmount)
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+											className: "py-2.5 px-3 text-right",
+											children: "GST"
 										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "py-3 px-3 text-right font-bold text-white tabular-nums",
-											children: formatAUD(o.total)
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+											className: "py-2.5 px-3 text-right",
+											children: "Total AUD"
 										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "py-3 px-3 text-center",
-											children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "px-2 py-0.5 rounded text-[10px] uppercase font-mono font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20",
-												children: o.status
-											})
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+											className: "py-2.5 px-3 text-center",
+											children: "Status"
 										})
 									]
-								}, o.id))
-							})]
+								}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", {
+									className: "divide-y divide-neutral-800/60 text-neutral-200",
+									children: orders.map((o) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+										className: "hover:bg-neutral-800/30 transition-colors",
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "py-3 px-3 font-mono font-semibold text-white",
+												children: o.orderNumber
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "py-3 px-3 font-mono text-neutral-400",
+												children: o.date
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+												className: "py-3 px-3",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "font-medium text-white",
+													children: o.customerName
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "text-[11px] text-neutral-400",
+													children: o.customerEmail
+												})]
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "py-3 px-3 text-neutral-300 max-w-xs truncate",
+												children: o.itemsSummary
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "py-3 px-3 text-right tabular-nums",
+												children: formatAUD(o.subtotal)
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "py-3 px-3 text-right tabular-nums text-emerald-400",
+												children: formatAUD(o.gstAmount)
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "py-3 px-3 text-right font-bold text-white tabular-nums",
+												children: formatAUD(o.total)
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "py-3 px-3 text-center",
+												children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+													className: "px-2 py-0.5 rounded text-[10px] uppercase font-mono font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20",
+													children: o.status
+												})
+											})
+										]
+									}, o.id))
+								})]
+							})
 						})
 					})
-				})
+				]
 			}),
 			activeTab === "products" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: "space-y-6",
@@ -2570,6 +3134,74 @@ var SalesView = ({ products, orders, payouts, taxProfile, onAddProduct, onAddPay
 						})]
 					}, p.id))
 				})]
+			}),
+			showSaleModal && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md",
+				children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl p-6 text-sm text-neutral-200 space-y-4",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex items-center justify-between pb-3 border-b border-neutral-800",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
+							className: "font-semibold text-white text-base",
+							children: "Record a shop sale"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+							type: "button",
+							onClick: () => setShowSaleModal(false),
+							className: "text-neutral-400 hover:text-white",
+							children: "✕"
+						})]
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", {
+						onSubmit: handleSaveSale,
+						className: "space-y-3",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+								className: "block text-xs font-semibold text-neutral-300",
+								children: ["Product", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
+									value: saleProductId,
+									onChange: (e) => setSaleProductId(e.target.value),
+									className: "mt-1 w-full px-3 py-2 bg-neutral-950 border border-neutral-700 rounded-lg text-white",
+									children: products.map((p) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
+										value: p.id,
+										children: [
+											p.name,
+											" · ",
+											formatAUD(p.price)
+										]
+									}, p.id))
+								})]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+								className: "block text-xs font-semibold text-neutral-300",
+								children: ["Customer", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+									required: true,
+									value: saleCustomer,
+									onChange: (e) => setSaleCustomer(e.target.value),
+									className: "mt-1 w-full px-3 py-2 bg-neutral-950 border border-neutral-700 rounded-lg text-white",
+									placeholder: "Name"
+								})]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+								className: "block text-xs font-semibold text-neutral-300",
+								children: ["Email", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+									type: "email",
+									value: saleEmail,
+									onChange: (e) => setSaleEmail(e.target.value),
+									className: "mt-1 w-full px-3 py-2 bg-neutral-950 border border-neutral-700 rounded-lg text-white",
+									placeholder: "Optional"
+								})]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "text-[11px] text-neutral-400",
+								children: "The sale is marked paid, added to the operating account, and posted to the ledger."
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "submit",
+								className: "w-full rounded-xl bg-emerald-600 py-2.5 text-xs font-semibold text-[#fff]",
+								children: "Save sale"
+							})
+						]
+					})]
+				})
 			}),
 			showAddPayoutModal && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 				className: "fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md",
@@ -2860,9 +3492,12 @@ var SalesView = ({ products, orders, payouts, taxProfile, onAddProduct, onAddPay
 		]
 	});
 };
-var InvoicesView = ({ invoices, clients, business, taxProfile, onAddInvoice, onMarkInvoicePaid }) => {
+var InvoicesView = ({ invoices, clients, business, taxProfile, onAddInvoice, onMarkInvoicePaid, bankAccounts = [], launchToken = 0 }) => {
 	const [selectedInvoice, setSelectedInvoice] = (0, import_react.useState)(null);
 	const [showCreateModal, setShowCreateModal] = (0, import_react.useState)(false);
+	(0, import_react.useEffect)(() => {
+		if (launchToken > 0) setShowCreateModal(true);
+	}, [launchToken]);
 	const [newClientId, setNewClientId] = (0, import_react.useState)(clients[0]?.id || "");
 	const [newDueDate, setNewDueDate] = (0, import_react.useState)("");
 	const [itemDesc, setItemDesc] = (0, import_react.useState)("Brand Campaign & UGC Content Creation (Reel + Stories)");
@@ -3339,28 +3974,34 @@ var InvoicesView = ({ invoices, clients, business, taxProfile, onAddInvoice, onM
 								children: [
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 										className: "font-semibold text-white",
-										children: "Payment Remittance Details:"
+										children: "Payment details"
 									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: ["Bank: ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										className: "text-white",
-										children: "Up Bank (Business Account)"
-									})] }),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: ["Account Name: ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										className: "text-white",
-										children: business.legalName
-									})] }),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-										"BSB: ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "font-mono text-white",
-											children: "633-123"
-										}),
-										" · Account Number: ",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "font-mono text-white",
-											children: "49201948"
-										})
-									] }),
+									(() => {
+										const payTo = bankAccounts.find((a) => a.type === "transaction") ?? bankAccounts[0];
+										if (!payTo) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { children: "Add an operating account in Money, then put it on the invoice." });
+										return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: ["Bank: ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "text-white",
+												children: payTo.bankName
+											})] }),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: ["Account name: ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "text-white",
+												children: payTo.accountName || business.legalName
+											})] }),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+												"BSB: ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+													className: "font-mono text-white",
+													children: payTo.bsb || "—"
+												}),
+												" · Account: ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+													className: "font-mono text-white",
+													children: payTo.accountNumber || "—"
+												})
+											] })
+										] });
+									})(),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: ["Reference: ", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 										className: "font-mono text-emerald-400",
 										children: selectedInvoice.invoiceNumber
@@ -3498,18 +4139,6 @@ var InvoicesView = ({ invoices, clients, business, taxProfile, onAddInvoice, onM
 				})
 			})
 		]
-	});
-};
-var createSsrRpc = (functionId) => {
-	const url = "/_serverFn/" + functionId;
-	const serverFnMeta = { id: functionId };
-	const fn = async (...args) => {
-		return (await getServerFnById(functionId, { origin: "server" }))(...args);
-	};
-	return Object.assign(fn, {
-		url,
-		serverFnMeta,
-		[TSS_SERVER_FUNCTION]: true
 	});
 };
 function asLexInput(input) {
@@ -4889,7 +5518,7 @@ var MoneyView = ({ bankAccounts, bankTransactions, expenses, journalEntries, tax
 					children: "Money, Ledger & Banking"
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 					className: "text-xs text-neutral-400 mt-0.5",
-					children: "Real Australian bank reconciliation, verified expense tracking, and balanced double-entry journals."
+					children: "Match what hits the account to invoices, payouts, and receipts. The sample feed is fictional and stays in this browser."
 				})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 					className: "flex items-center gap-1 p-1 bg-neutral-900 border border-neutral-800 rounded-xl text-xs",
 					children: [
@@ -5658,7 +6287,7 @@ var MoneyView = ({ bankAccounts, bankTransactions, expenses, journalEntries, tax
 		]
 	});
 };
-var ComplianceRadarView = ({ business, taxProfile, operatingProfile, basPeriod, obligations, annualRevenue, annualTaxableIncome, onLockBASPeriod, onUpdateObligation }) => {
+var ComplianceRadarView = ({ business, taxProfile, operatingProfile, basPeriod, obligations, annualRevenue, annualTaxableIncome, onLockBASPeriod, onUpdateObligation, activityAfterPeriod = 0, onApplyRegister }) => {
 	const [activeSubTab, setActiveSubTab] = (0, import_react.useState)("radar");
 	const [selectedObligation, setSelectedObligation] = (0, import_react.useState)(null);
 	const [current12mTurnover, setCurrent12mTurnover] = (0, import_react.useState)(annualRevenue || 68400);
@@ -5696,42 +6325,63 @@ var ComplianceRadarView = ({ business, taxProfile, operatingProfile, basPeriod, 
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "text-xs text-neutral-400 mt-0.5",
 						children: "Progressive obligation map across ABR, ASIC, ATO and Fair Work. All rules versioned to 2026/2027 standards."
+					}),
+					activityAfterPeriod > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+						className: "mt-2 max-w-xl text-xs text-amber-300",
+						children: [
+							activityAfterPeriod,
+							" transaction",
+							activityAfterPeriod === 1 ? "" : "s",
+							" dated after ",
+							basPeriod.endDate,
+							" ",
+							basPeriod.status === "LOCKED" || basPeriod.status === "LODGED" ? "will sit in the next BAS" : "are not in this BAS yet",
+							". This quarter stays as prepared."
+						]
 					})
-				] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "flex flex-wrap items-center gap-1 p-1 bg-neutral-900 border border-neutral-800 rounded-xl text-xs",
-					children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-							onClick: () => setActiveSubTab("radar"),
-							className: `px-3 py-1.5 font-medium rounded-lg transition-colors ${activeSubTab === "radar" ? "bg-neutral-800 text-white shadow-sm" : "text-neutral-400 hover:text-neutral-200"}`,
-							children: "Overview"
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-							onClick: () => setActiveSubTab("gst_monitor"),
-							className: `px-3 py-1.5 font-medium rounded-lg transition-colors ${activeSubTab === "gst_monitor" ? "bg-neutral-800 text-white shadow-sm" : "text-neutral-400 hover:text-neutral-200"}`,
-							children: "$75k GST Monitor"
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-							onClick: () => setActiveSubTab("bas_workspace"),
-							className: `px-3 py-1.5 font-medium rounded-lg transition-colors ${activeSubTab === "bas_workspace" ? "bg-neutral-800 text-white shadow-sm" : "text-neutral-400 hover:text-neutral-200"}`,
-							children: "BAS Workspace"
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-							onClick: () => setActiveSubTab("tax_reserve"),
-							className: `px-3 py-1.5 font-medium rounded-lg transition-colors ${activeSubTab === "tax_reserve" ? "bg-neutral-800 text-white shadow-sm" : "text-neutral-400 hover:text-neutral-200"}`,
-							children: "Tax Reserve"
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-							onClick: () => setActiveSubTab("worker_test"),
-							className: `px-3 py-1.5 font-medium rounded-lg transition-colors ${activeSubTab === "worker_test" ? "bg-neutral-800 text-white shadow-sm" : "text-neutral-400 hover:text-neutral-200"}`,
-							children: "Worker Test (12% SG)"
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-							onClick: () => setActiveSubTab("asic_gov"),
-							className: `px-3 py-1.5 font-medium rounded-lg transition-colors ${activeSubTab === "asic_gov" ? "bg-neutral-800 text-white shadow-sm" : "text-neutral-400 hover:text-neutral-200"}`,
-							children: "ASIC & Director"
-						})
-					]
+				] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					className: "w-full sm:max-w-md",
+					children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(AbnCheck, {
+						abn: business.abn,
+						booksName: business.legalName,
+						onUse: onApplyRegister
+					})
 				})]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "flex flex-wrap items-center gap-1 p-1 bg-neutral-900 border border-neutral-800 rounded-xl text-xs",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						onClick: () => setActiveSubTab("radar"),
+						className: `px-3 py-1.5 font-medium rounded-lg transition-colors ${activeSubTab === "radar" ? "bg-neutral-800 text-white shadow-sm" : "text-neutral-400 hover:text-neutral-200"}`,
+						children: "Overview"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						onClick: () => setActiveSubTab("gst_monitor"),
+						className: `px-3 py-1.5 font-medium rounded-lg transition-colors ${activeSubTab === "gst_monitor" ? "bg-neutral-800 text-white shadow-sm" : "text-neutral-400 hover:text-neutral-200"}`,
+						children: "$75k GST Monitor"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						onClick: () => setActiveSubTab("bas_workspace"),
+						className: `px-3 py-1.5 font-medium rounded-lg transition-colors ${activeSubTab === "bas_workspace" ? "bg-neutral-800 text-white shadow-sm" : "text-neutral-400 hover:text-neutral-200"}`,
+						children: "BAS Workspace"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						onClick: () => setActiveSubTab("tax_reserve"),
+						className: `px-3 py-1.5 font-medium rounded-lg transition-colors ${activeSubTab === "tax_reserve" ? "bg-neutral-800 text-white shadow-sm" : "text-neutral-400 hover:text-neutral-200"}`,
+						children: "Tax Reserve"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						onClick: () => setActiveSubTab("worker_test"),
+						className: `px-3 py-1.5 font-medium rounded-lg transition-colors ${activeSubTab === "worker_test" ? "bg-neutral-800 text-white shadow-sm" : "text-neutral-400 hover:text-neutral-200"}`,
+						children: "Worker Test (12% SG)"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						onClick: () => setActiveSubTab("asic_gov"),
+						className: `px-3 py-1.5 font-medium rounded-lg transition-colors ${activeSubTab === "asic_gov" ? "bg-neutral-800 text-white shadow-sm" : "text-neutral-400 hover:text-neutral-200"}`,
+						children: "ASIC & Director"
+					})
+				]
 			}),
 			activeSubTab === "radar" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: "space-y-6",
@@ -5773,7 +6423,7 @@ var ComplianceRadarView = ({ business, taxProfile, operatingProfile, basPeriod, 
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 										className: "text-xs text-neutral-300 mt-1 line-clamp-2",
-										children: ob.summary
+										children: ob.summary.replace(/Due in \d+ days/, `Due in ${ob.dueDate ? calendarDaysUntil(ob.dueDate) : ""} days`)
 									}),
 									ob.dueDate && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 										className: "flex items-center gap-1.5 text-xs text-neutral-400 mt-3 pt-3 border-t border-neutral-800/80",
@@ -5781,7 +6431,7 @@ var ComplianceRadarView = ({ business, taxProfile, operatingProfile, basPeriod, 
 											"Due: ",
 											ob.dueDate,
 											" (",
-											ob.daysRemaining,
+											Math.max(0, calendarDaysUntil(ob.dueDate)),
 											" days remaining)"
 										] })]
 									})
@@ -6714,18 +7364,19 @@ var AccountantPortalView = ({ business, taxProfile, journalEntries, basPeriod, e
 						children: [
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 								className: "text-xs text-neutral-400",
-								children: "General Ledger Balance"
+								children: "General ledger"
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 								className: "text-xl font-bold text-white mt-1 font-mono",
-								children: "100% BALANCED"
+								children: journalEntries.length === 0 ? "No journals yet" : journalEntries.every((j) => j.isBalanced) ? "Balanced" : "Out of balance"
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "text-[11px] text-emerald-400 mt-1",
+								className: "text-[11px] text-neutral-400 mt-1",
 								children: [
-									"All ",
+									journalEntries.filter((j) => j.isBalanced).length,
+									" of ",
 									journalEntries.length,
-									" journals in balance"
+									" journals balance"
 								]
 							})
 						]
@@ -6735,15 +7386,15 @@ var AccountantPortalView = ({ business, taxProfile, journalEntries, basPeriod, e
 						children: [
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 								className: "text-xs text-neutral-400",
-								children: "Audit & Evidence Status"
+								children: "Still to check"
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 								className: "text-xl font-bold text-amber-300 mt-1",
-								children: "2 Pending Vouchers"
+								children: bankTransactions.filter((t) => t.status !== "MATCHED").length
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 								className: "text-[11px] text-neutral-400 mt-1",
-								children: "94% substantiated"
+								children: "Bank lines not matched to a payment"
 							})
 						]
 					})
@@ -6758,42 +7409,42 @@ var AccountantPortalView = ({ business, taxProfile, journalEntries, basPeriod, e
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "text-xs text-neutral-400",
-						children: "Verify these statutory items prior to BAS lodgement and annual company tax return preparation."
+						children: "Check these against the books in this browser before anyone lodges. Nothing here is sent to the ATO."
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 						className: "space-y-2 text-xs",
 						children: [
 							{
-								label: "Bank Statement Reconciliation",
-								detail: "Verify Up Bank and CommBank closing balances match ledger accounts.",
-								verified: true
+								label: "Journals",
+								detail: journalEntries.length === 0 ? "No journals yet." : journalEntries.every((j) => j.isBalanced) ? "Every journal balances." : "At least one journal does not balance.",
+								verified: journalEntries.length > 0 && journalEntries.every((j) => j.isBalanced)
 							},
 							{
-								label: "Platform Payout Unbundling",
-								detail: "Confirm gross subscriber revenue, platform cuts (20%), and wire fees are separated.",
-								verified: true
-							},
-							{
-								label: "GST-Free Export Classification",
-								detail: "Check overseas subscriber portion of Patreon & OnlyFans revenue under GST Act s 38-190.",
+								label: "Bank lines",
+								detail: "Money you recorded in the operating account. There is no live bank feed to reconcile against.",
 								verified: false
 							},
 							{
-								label: "Motor Vehicle & Mobile Private Use Apportionment",
-								detail: "Verify 4-week mobile log substantiates 70% business claim.",
-								verified: true
-							},
-							{
-								label: "Capital Equipment Depreciation (Sony FX3)",
-								detail: "Assess eligibility under Small Business Instant Asset Write-Off vs depreciation.",
-								verified: true
-							},
-							{
-								label: "Worker Classification & 12% Super Guarantee",
-								detail: "Confirm videographer & assistant contracts are genuinely independent.",
+								label: "GST",
+								detail: taxProfile.gstRegistered ? `Registered. 1A ${formatAUD(basPeriod.gst1aSalesGst)} and 1B ${formatAUD(basPeriod.gst1bPurchaseGstCredits)} on ${basPeriod.label}.` : "Not registered for GST.",
 								verified: false
+							},
+							{
+								label: "BAS period",
+								detail: `${basPeriod.label} is ${basPeriod.status}. Lodging stays with you or your agent.`,
+								verified: basPeriod.status === "LOCKED" || basPeriod.status === "LODGED"
+							},
+							...payouts.length ? [{
+								label: "Platform payouts",
+								detail: `${payouts.length} payout${payouts.length === 1 ? "" : "s"} recorded, with fees kept separate from the net deposit.`,
+								verified: true
+							}] : [],
+							{
+								label: "Expenses",
+								detail: expenses.length ? `${expenses.length} expense${expenses.length === 1 ? "" : "s"} in the books.` : "No expenses recorded.",
+								verified: expenses.length > 0
 							}
-						].map((item, idx) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						].map((item) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 							className: "p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-between",
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 								className: "font-semibold text-white flex items-center gap-2",
@@ -6805,7 +7456,7 @@ var AccountantPortalView = ({ business, taxProfile, journalEntries, basPeriod, e
 								className: `px-2.5 py-1 rounded text-[10px] font-mono font-semibold uppercase ${item.verified ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20" : "text-amber-400 bg-amber-500/10 border border-amber-500/20"}`,
 								children: item.verified ? "VERIFIED" : "ACTION REQUIRED"
 							})]
-						}, idx))
+						}, item.label))
 					})
 				]
 			}),
@@ -6946,10 +7597,12 @@ var FilesView = ({ documents, onAddDocument }) => {
 	const onUpload = (file) => {
 		if (!file) return;
 		const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+		const name = file.name.toLowerCase();
+		const category = /receipt/.test(name) ? "receipt" : /invoice/.test(name) ? "tax_invoice" : /statement|bank/.test(name) ? "bank_statement" : /asic|acn/.test(name) ? "asic" : /abn|registration/.test(name) ? "registration" : "contract";
 		onAddDocument({
 			id: `doc-${Date.now()}`,
 			title: file.name.replace(/\.[^.]+$/, ""),
-			category: "contract",
+			category,
 			filename: file.name,
 			fileSize: file.size > 1e6 ? `${(file.size / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(file.size / 1e3))} KB`,
 			uploadDate: today,
@@ -7137,6 +7790,238 @@ var FilesView = ({ documents, onAddDocument }) => {
 		]
 	});
 };
+var AIAssistantDrawer = ({ isOpen, onClose, business, taxProfile }) => {
+	const messagesEndRef = (0, import_react.useRef)(null);
+	const initialGreeting = {
+		id: "msg-init-lex",
+		sender: "lex",
+		text: "Hi. Ask me about GST, a job, or what you can claim. I'll keep it short.",
+		timestamp: "Just now"
+	};
+	const [messages, setMessages] = (0, import_react.useState)([initialGreeting]);
+	const [input, setInput] = (0, import_react.useState)("");
+	const [isTyping, setIsTyping] = (0, import_react.useState)(false);
+	const quickQuestions = [
+		"Do I need to register for GST?",
+		"What can I claim?",
+		"How does super work?"
+	];
+	const scrollToBottom = () => {
+		messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+	};
+	(0, import_react.useEffect)(() => {
+		if (isOpen) scrollToBottom();
+	}, [messages, isOpen]);
+	const saveMessage = async (_msg) => {};
+	const handleSend = async (textToSend) => {
+		const queryText = (textToSend || input).trim();
+		if (!queryText || isTyping) return;
+		const userMsg = {
+			id: `usr-${Date.now()}`,
+			sender: "user",
+			text: queryText,
+			timestamp: (/* @__PURE__ */ new Date()).toLocaleTimeString([], {
+				hour: "2-digit",
+				minute: "2-digit"
+			})
+		};
+		setMessages((prev) => [...prev, userMsg]);
+		if (!textToSend) setInput("");
+		setIsTyping(true);
+		saveMessage(userMsg);
+		try {
+			const historyPayload = messages.map((m) => ({
+				role: m.sender === "user" ? "user" : "model",
+				content: m.text
+			}));
+			historyPayload.push({
+				role: "user",
+				content: queryText
+			});
+			const data = await askLex({ data: {
+				messages: historyPayload.map((m) => ({
+					role: m.role === "user" ? "user" : "assistant",
+					content: m.content
+				})),
+				context: {
+					legalName: business.legalName,
+					abn: business.abn,
+					entityType: business.entityType,
+					gstRegistered: taxProfile.gstRegistered
+				}
+			} });
+			const lexReply = {
+				id: `lex-${Date.now()}`,
+				sender: "lex",
+				text: data.reply || "I am processing your query under Australian regulatory frameworks.",
+				timestamp: (/* @__PURE__ */ new Date()).toLocaleTimeString([], {
+					hour: "2-digit",
+					minute: "2-digit"
+				}),
+				sources: data.sources || []
+			};
+			setMessages((prev) => [...prev, lexReply]);
+			saveMessage(lexReply);
+		} catch (error) {
+			console.error("[v0] Lex AI assistant error:", error instanceof Error ? error.message : "unknown error");
+			const unavailableMsg = {
+				id: `lex-${Date.now()}`,
+				sender: "lex",
+				text: "Lex is temporarily unavailable. Please try again later or consult your registered tax agent.",
+				timestamp: (/* @__PURE__ */ new Date()).toLocaleTimeString([], {
+					hour: "2-digit",
+					minute: "2-digit"
+				}),
+				sources: []
+			};
+			setMessages((prev) => [...prev, unavailableMsg]);
+			saveMessage(unavailableMsg);
+		} finally {
+			setIsTyping(false);
+		}
+	};
+	const handleResetChat = () => {
+		setMessages([initialGreeting]);
+	};
+	if (!isOpen) return null;
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "fixed inset-x-0 bottom-0 top-[env(safe-area-inset-top)] z-50 flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden bg-neutral-900 shadow-2xl antialiased sm:inset-y-0 sm:left-auto sm:top-0 sm:w-[min(500px,calc(100vw-2rem))] sm:border-l sm:border-neutral-800",
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "flex shrink-0 items-center justify-between border-b border-neutral-800 bg-neutral-950 p-3 sm:p-4",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex min-w-0 items-center gap-2.5 sm:gap-3",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							className: "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/20 to-teal-500/20 text-emerald-400 shadow-sm shadow-emerald-500/10",
+							children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Sparkles, { className: "h-5 w-5" })
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", {
+							src: "/talentos-logo.png",
+							alt: "Talentos",
+							className: "h-6 w-auto max-w-[96px] object-contain object-left sm:h-7 sm:max-w-[120px]"
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							className: "flex items-center gap-2",
+							children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
+								className: "font-semibold text-white text-sm",
+								children: "Lex"
+							})
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+							className: "text-[11px] text-neutral-400",
+							children: "Ask when you need to"
+						})] })
+					]
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex items-center gap-1",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						onClick: handleResetChat,
+						className: "p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-800 transition-colors",
+						title: "Start new conversation",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(RotateCcw, { className: "w-4 h-4" })
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						onClick: onClose,
+						className: "p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-800 transition-colors",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "w-5 h-5" })
+					})]
+				})]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-3 text-xs sm:p-4",
+				children: [
+					messages.map((m) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: `flex gap-3 ${m.sender === "user" ? "justify-end" : "justify-start"}`,
+						children: [
+							m.sender === "lex" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "w-7 h-7 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5",
+								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Bot, { className: "w-4 h-4" })
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: `max-w-[85%] space-y-2`,
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: `p-3.5 rounded-2xl leading-relaxed whitespace-pre-wrap ${m.sender === "user" ? "bg-emerald-600 text-[#fff] rounded-tr-sm shadow-md shadow-emerald-600/10" : "bg-neutral-950 border border-neutral-800 text-neutral-200 rounded-tl-sm shadow-sm"}`,
+									children: [m.text, m.sources && m.sources.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "mt-3 pt-2.5 border-t border-neutral-800/80 space-y-1",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "text-[10px] font-mono text-neutral-400 flex items-center gap-1 uppercase",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Globe, { className: "w-3 h-3 text-emerald-400" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Sources" })]
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											className: "flex flex-wrap gap-1.5 pt-0.5",
+											children: m.sources.map((src, idx) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("a", {
+												href: src.uri,
+												target: "_blank",
+												rel: "noopener noreferrer",
+												className: "inline-flex items-center gap-1 text-[10px] text-emerald-400 hover:text-emerald-300 bg-neutral-900 border border-neutral-800 hover:border-emerald-500/40 px-2 py-0.5 rounded-md transition-colors",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+													className: "truncate max-w-[200px]",
+													children: src.title
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ExternalLink, { className: "w-2.5 h-2.5 shrink-0" })]
+											}, idx))
+										})]
+									})]
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: `text-[10px] font-mono text-neutral-500 px-1 ${m.sender === "user" ? "text-right" : "text-left"}`,
+									children: m.timestamp
+								})]
+							}),
+							m.sender === "user" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "w-7 h-7 rounded-xl bg-neutral-800 text-neutral-300 flex items-center justify-center shrink-0 mt-0.5",
+								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(User, { className: "w-4 h-4" })
+							})
+						]
+					}, m.id)),
+					isTyping && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex items-center gap-2.5 text-neutral-400 text-xs italic py-2",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							className: "w-7 h-7 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0",
+							children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Bot, { className: "w-4 h-4 animate-spin" })
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+							className: "text-[11px]",
+							children: "Thinking…"
+						})]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { ref: messagesEndRef })
+				]
+			}),
+			messages.length === 1 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "shrink-0 space-y-2 border-t border-neutral-800/80 bg-neutral-950/40 px-3 py-3",
+				children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					className: "flex flex-wrap gap-1.5",
+					children: quickQuestions.map((q) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						onClick: () => handleSend(q),
+						disabled: isTyping,
+						className: "rounded-full border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-left text-[11px] text-neutral-300 hover:border-neutral-700 hover:bg-neutral-800 disabled:opacity-50",
+						children: q
+					}, q))
+				})
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "shrink-0 border-t border-neutral-800 bg-neutral-950 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+				children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", {
+					onSubmit: (e) => {
+						e.preventDefault();
+						handleSend();
+					},
+					className: "flex items-center gap-2",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+						type: "text",
+						placeholder: "Ask a question",
+						value: input,
+						onChange: (e) => setInput(e.target.value),
+						disabled: isTyping,
+						className: "flex-1 px-3 py-2 text-xs bg-neutral-900 border border-neutral-700 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "submit",
+						disabled: !input.trim() || isTyping,
+						className: "p-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-[#fff] disabled:opacity-50 transition-colors cursor-pointer",
+						title: "Send to Lex",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Send, { className: "w-4 h-4" })
+					})]
+				})
+			})
+		]
+	});
+};
 var DEFAULT_NOTIFICATIONS = {
 	emailAlerts: true,
 	gstThresholdWarning: true,
@@ -7297,268 +8182,7 @@ var useAuth = () => {
 	if (!context) throw new Error("useAuth must be used within an AuthProvider");
 	return context;
 };
-var AIAssistantDrawer = ({ isOpen, onClose, business, taxProfile }) => {
-	const { user } = useAuth();
-	const messagesEndRef = (0, import_react.useRef)(null);
-	const initialGreeting = {
-		id: "msg-init-lex",
-		sender: "lex",
-		text: `G'day ${business.legalName.split(" ")[0] || "Creator"}! I'm Lex, your dedicated Australian creator business partner and regulatory advisor. 
-
-I'm grounded in current 2026/2027 ATO guidelines, Fair Work rules, and commercial influencer practices. Ask me about:
-• $75,000 GST thresholds and issuing valid Tax Invoices
-• 12.0% Superannuation Guarantee for your videographers & editors
-• Unbundling OnlyFans/YouTube gross income & platform fee deductions
-• Brand deal contract clauses (usage rights, exclusivity, whitelisting)
-• Deducting camera gear, studios, and travel under ATO logbook rules.`,
-		timestamp: "Just now"
-	};
-	const [messages, setMessages] = (0, import_react.useState)([initialGreeting]);
-	const [input, setInput] = (0, import_react.useState)("");
-	const [isTyping, setIsTyping] = (0, import_react.useState)(false);
-	const quickQuestions = [
-		"Do I need to register for GST if I hit $75k?",
-		"Do I pay 12% super to my videographer?",
-		"How do I account for OnlyFans 20% platform cut on my BAS?",
-		"Can I claim 80% of my camera & editing laptop?",
-		"What should I charge for 90-day digital usage rights?"
-	];
-	const scrollToBottom = () => {
-		messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-	};
-	(0, import_react.useEffect)(() => {
-		if (isOpen) scrollToBottom();
-	}, [messages, isOpen]);
-	const saveMessage = async (_msg) => {};
-	const handleSend = async (textToSend) => {
-		const queryText = (textToSend || input).trim();
-		if (!queryText || isTyping) return;
-		const userMsg = {
-			id: `usr-${Date.now()}`,
-			sender: "user",
-			text: queryText,
-			timestamp: (/* @__PURE__ */ new Date()).toLocaleTimeString([], {
-				hour: "2-digit",
-				minute: "2-digit"
-			})
-		};
-		setMessages((prev) => [...prev, userMsg]);
-		if (!textToSend) setInput("");
-		setIsTyping(true);
-		saveMessage(userMsg);
-		try {
-			const historyPayload = messages.map((m) => ({
-				role: m.sender === "user" ? "user" : "model",
-				content: m.text
-			}));
-			historyPayload.push({
-				role: "user",
-				content: queryText
-			});
-			const data = await askLex({ data: {
-				messages: historyPayload.map((m) => ({
-					role: m.role === "user" ? "user" : "assistant",
-					content: m.content
-				})),
-				context: {
-					legalName: business.legalName,
-					abn: business.abn,
-					entityType: business.entityType,
-					gstRegistered: taxProfile.gstRegistered
-				}
-			} });
-			const lexReply = {
-				id: `lex-${Date.now()}`,
-				sender: "lex",
-				text: data.reply || "I am processing your query under Australian regulatory frameworks.",
-				timestamp: (/* @__PURE__ */ new Date()).toLocaleTimeString([], {
-					hour: "2-digit",
-					minute: "2-digit"
-				}),
-				sources: data.sources || []
-			};
-			setMessages((prev) => [...prev, lexReply]);
-			saveMessage(lexReply);
-		} catch (error) {
-			console.error("[v0] Lex AI assistant error:", error instanceof Error ? error.message : "unknown error");
-			const unavailableMsg = {
-				id: `lex-${Date.now()}`,
-				sender: "lex",
-				text: "Lex is temporarily unavailable. Please try again later or consult your registered tax agent.",
-				timestamp: (/* @__PURE__ */ new Date()).toLocaleTimeString([], {
-					hour: "2-digit",
-					minute: "2-digit"
-				}),
-				sources: []
-			};
-			setMessages((prev) => [...prev, unavailableMsg]);
-			saveMessage(unavailableMsg);
-		} finally {
-			setIsTyping(false);
-		}
-	};
-	const handleResetChat = () => {
-		setMessages([initialGreeting]);
-	};
-	if (!isOpen) return null;
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "fixed inset-x-0 bottom-0 top-[env(safe-area-inset-top)] z-50 flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden bg-neutral-900 shadow-2xl antialiased sm:inset-y-0 sm:left-auto sm:top-0 sm:w-[min(500px,calc(100vw-2rem))] sm:border-l sm:border-neutral-800",
-		children: [
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "flex shrink-0 items-center justify-between border-b border-neutral-800 bg-neutral-950 p-3 sm:p-4",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "flex min-w-0 items-center gap-2.5 sm:gap-3",
-					children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-							className: "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/20 to-teal-500/20 text-emerald-400 shadow-sm shadow-emerald-500/10",
-							children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Sparkles, { className: "h-5 w-5" })
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", {
-							src: "/talentos-logo.png",
-							alt: "Talentos",
-							className: "h-6 w-auto max-w-[96px] object-contain object-left sm:h-7 sm:max-w-[120px]"
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "flex items-center gap-2",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
-								className: "font-semibold text-white text-sm",
-								children: "Lex"
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-								className: "text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30",
-								children: "AI advisor"
-							})]
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-							className: "text-[11px] text-neutral-400",
-							children: "Australian Creator & Regulatory Advisor"
-						})] })
-					]
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "flex items-center gap-1",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-						onClick: handleResetChat,
-						className: "p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-800 transition-colors",
-						title: "Start new conversation",
-						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(RotateCcw, { className: "w-4 h-4" })
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-						onClick: onClose,
-						className: "p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-800 transition-colors",
-						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "w-5 h-5" })
-					})]
-				})]
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "px-4 py-1.5 bg-neutral-950/70 border-b border-neutral-800/60 flex items-center justify-between text-[10px] text-neutral-400 font-mono",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "flex items-center gap-1.5",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "ONLINE · ATO 2026/2027 TAX GROUNDED" })]
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { children: user ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-					className: "text-emerald-400 flex items-center gap-1",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleCheck, { className: "w-3 h-3" }), " Cloud Synced"]
-				}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-					className: "text-neutral-500",
-					children: "Local Session"
-				}) })]
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-3 text-xs sm:p-4",
-				children: [
-					messages.map((m) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: `flex gap-3 ${m.sender === "user" ? "justify-end" : "justify-start"}`,
-						children: [
-							m.sender === "lex" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "w-7 h-7 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5",
-								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Bot, { className: "w-4 h-4" })
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: `max-w-[85%] space-y-2`,
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: `p-3.5 rounded-2xl leading-relaxed whitespace-pre-wrap ${m.sender === "user" ? "bg-emerald-600 text-[#fff] rounded-tr-sm shadow-md shadow-emerald-600/10" : "bg-neutral-950 border border-neutral-800 text-neutral-200 rounded-tl-sm shadow-sm"}`,
-									children: [m.text, m.sources && m.sources.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "mt-3 pt-2.5 border-t border-neutral-800/80 space-y-1",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "text-[10px] font-mono text-neutral-400 flex items-center gap-1 uppercase",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Globe, { className: "w-3 h-3 text-emerald-400" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Verified Regulatory Sources:" })]
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-											className: "flex flex-wrap gap-1.5 pt-0.5",
-											children: m.sources.map((src, idx) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("a", {
-												href: src.uri,
-												target: "_blank",
-												rel: "noopener noreferrer",
-												className: "inline-flex items-center gap-1 text-[10px] text-emerald-400 hover:text-emerald-300 bg-neutral-900 border border-neutral-800 hover:border-emerald-500/40 px-2 py-0.5 rounded-md transition-colors",
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-													className: "truncate max-w-[200px]",
-													children: src.title
-												}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ExternalLink, { className: "w-2.5 h-2.5 shrink-0" })]
-											}, idx))
-										})]
-									})]
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: `text-[10px] font-mono text-neutral-500 px-1 ${m.sender === "user" ? "text-right" : "text-left"}`,
-									children: m.timestamp
-								})]
-							}),
-							m.sender === "user" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "w-7 h-7 rounded-xl bg-neutral-800 text-neutral-300 flex items-center justify-center shrink-0 mt-0.5",
-								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(User, { className: "w-4 h-4" })
-							})
-						]
-					}, m.id)),
-					isTyping && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "flex items-center gap-2.5 text-neutral-400 text-xs italic py-2",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-							className: "w-7 h-7 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0",
-							children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Bot, { className: "w-4 h-4 animate-spin" })
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-							className: "text-[11px]",
-							children: "Lex is consulting ATO tax rulings & search data..."
-						})]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { ref: messagesEndRef })
-				]
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "max-h-[clamp(96px,22dvh,180px)] shrink-0 space-y-1.5 overflow-y-auto overscroll-contain border-t border-neutral-800/80 bg-neutral-950/60 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-					className: "text-[10px] font-mono text-neutral-500 uppercase tracking-wider block",
-					children: "Frequent Creator Questions:"
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-					className: "flex flex-wrap gap-1.5",
-					children: quickQuestions.map((q, idx) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-						onClick: () => handleSend(q),
-						disabled: isTyping,
-						className: "text-[11px] text-neutral-300 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 px-2.5 py-1 rounded-lg text-left transition-colors cursor-pointer disabled:opacity-50",
-						children: q
-					}, idx))
-				})]
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-				className: "shrink-0 border-t border-neutral-800 bg-neutral-950 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]",
-				children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", {
-					onSubmit: (e) => {
-						e.preventDefault();
-						handleSend();
-					},
-					className: "flex items-center gap-2",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-						type: "text",
-						placeholder: "Ask Lex about ABN, GST, 12% super, OnlyFans cut, or contracts...",
-						value: input,
-						onChange: (e) => setInput(e.target.value),
-						disabled: isTyping,
-						className: "flex-1 px-3 py-2 text-xs bg-neutral-900 border border-neutral-700 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-						type: "submit",
-						disabled: !input.trim() || isTyping,
-						className: "p-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-[#fff] disabled:opacity-50 transition-colors cursor-pointer",
-						title: "Send to Lex",
-						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Send, { className: "w-4 h-4" })
-					})]
-				})
-			})
-		]
-	});
-};
-var SettingsModal = ({ isOpen, onClose, business, taxProfile, onOpenAuth, onRestartOnboarding, initialTab = "theme" }) => {
+var SettingsModal = ({ isOpen, onClose, business, taxProfile, onOpenAuth, onRestartOnboarding, onApplyRegister, industryId, onIndustryChange, initialTab = "theme" }) => {
 	const { user, userProfile, theme, setTheme, notificationPreferences, updateNotificationPreferences, logOut } = useAuth();
 	const [activeTab, setActiveTab] = (0, import_react.useState)(initialTab);
 	const [saveSuccess, setSaveSuccess] = (0, import_react.useState)(false);
@@ -7624,7 +8248,7 @@ var SettingsModal = ({ isOpen, onClose, business, taxProfile, onOpenAuth, onRest
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 							onClick: () => setActiveTab("account"),
 							className: `py-3 px-3 border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === "account" ? "border-emerald-500 text-emerald-400 font-semibold" : "border-transparent text-neutral-400 hover:text-neutral-200"}`,
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(User, { className: "w-4 h-4" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Cloud Account & Auth" })]
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(User, { className: "w-4 h-4" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Account" })]
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 							onClick: () => setActiveTab("compliance"),
@@ -7717,6 +8341,31 @@ var SettingsModal = ({ isOpen, onClose, business, taxProfile, onOpenAuth, onRest
 										})
 									]
 								}),
+								onIndustryChange && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
+										className: "text-sm font-semibold text-white",
+										children: "Industry colour"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+										className: "mt-0.5 text-xs text-neutral-400",
+										children: "talentOS by cdxi takes its colour from the trade on the books. Job names change with it."
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: "mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2",
+										children: INDUSTRIES.map((item) => {
+											const selected = industryById(industryId).id === item.id;
+											return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												type: "button",
+												onClick: () => onIndustryChange(item.id),
+												className: `flex min-h-11 items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs font-semibold ${selected ? "border-accent bg-accent-soft text-accent" : "border-neutral-800 text-ink"}`,
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+													className: "h-3 w-3 shrink-0 rounded-full",
+													style: { background: industryAccent(item.id) }
+												}), item.label]
+											}, item.id);
+										})
+									})
+								] }),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 									className: "p-4 rounded-xl bg-neutral-950 border border-neutral-800 space-y-2",
 									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -7817,10 +8466,10 @@ var SettingsModal = ({ isOpen, onClose, business, taxProfile, onOpenAuth, onRest
 							children: [
 								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
 									className: "text-sm font-semibold text-white",
-									children: "Creator Cloud Authentication"
+									children: "This browser"
 								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 									className: "text-xs text-neutral-400 mt-0.5",
-									children: "Manage your authenticated session and secure Neon database connection."
+									children: "Your books stay on this device. Signing in keeps a separate set of books here. Nothing is uploaded to a cloud database."
 								})] }),
 								user ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 									className: "p-4 rounded-xl bg-neutral-950 border border-neutral-800 space-y-4",
@@ -7865,16 +8514,16 @@ var SettingsModal = ({ isOpen, onClose, business, taxProfile, onOpenAuth, onRest
 										className: "pt-3 border-t border-neutral-800/80 grid grid-cols-2 gap-3 text-xs",
 										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 											className: "text-neutral-500 block text-[10px] uppercase font-mono",
-											children: "Database Engine:"
+											children: "Where the books live:"
 										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
 											className: "text-neutral-300 font-mono text-[11px] flex items-center gap-1 mt-0.5",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Database, { className: "w-3.5 h-3.5 text-emerald-400" }), "Neon Postgres"]
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Database, { className: "w-3.5 h-3.5 text-emerald-400" }), "This browser"]
 										})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 											className: "text-neutral-500 block text-[10px] uppercase font-mono",
-											children: "Sync Integrity:"
+											children: "Sync:"
 										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
 											className: "text-emerald-400 font-mono text-[11px] flex items-center gap-1 mt-0.5",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleCheckBig, { className: "w-3.5 h-3.5" }), "Live Security Hardened"]
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleCheckBig, { className: "w-3.5 h-3.5" }), "Saved locally"]
 										})] })]
 									})]
 								}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -7889,7 +8538,7 @@ var SettingsModal = ({ isOpen, onClose, business, taxProfile, onOpenAuth, onRest
 											children: "You are currently browsing with Local Workspace Storage"
 										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 											className: "text-[11px] text-neutral-400 max-w-md mx-auto mt-1",
-											children: "Sign in or create an account to securely sync your Australian Business Number records, invoices, bookings, and Lex AI history across all your devices."
+											children: "Sign in to keep your own books separate from the sample studio. They stay in this browser."
 										})] }),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 											type: "button",
@@ -7936,7 +8585,7 @@ var SettingsModal = ({ isOpen, onClose, business, taxProfile, onOpenAuth, onRest
 									children: "Registered Entity Profile"
 								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 									className: "text-xs text-neutral-400 mt-0.5",
-									children: "Statutory details verified against Australian Business Register (ABR) Modulus-89 criteria."
+									children: "The checksum is instant. Check the register to read the public ABN Lookup record."
 								})] }),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 									className: "grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs",
@@ -7960,8 +8609,10 @@ var SettingsModal = ({ isOpen, onClose, business, taxProfile, onOpenAuth, onRest
 												className: "font-semibold text-emerald-400 font-mono text-xs",
 												children: [
 													"ABN ",
-													business.abn,
-													" (Valid Mod-89)"
+													business.abn || "—",
+													" (",
+													validateAustralianABN(business.abn || "").isValid ? "checksum passes" : "not a valid ABN",
+													")"
 												]
 											})]
 										}),
@@ -7986,6 +8637,11 @@ var SettingsModal = ({ isOpen, onClose, business, taxProfile, onOpenAuth, onRest
 											})]
 										})
 									]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)(AbnCheck, {
+									abn: business.abn,
+									booksName: business.legalName,
+									onUse: onApplyRegister
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 									className: "p-3.5 rounded-xl bg-neutral-950/80 border border-neutral-800/80 text-[11px] text-neutral-400 flex items-start gap-2",
@@ -8149,6 +8805,256 @@ var AuthModal = ({ isOpen, onClose, defaultMode = "signin" }) => {
 		})
 	});
 };
+function todayIso$1() {
+	return (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+}
+function round2(n) {
+	return Math.round(n * 100) / 100;
+}
+function inBasPeriod(bas, date) {
+	return Boolean(date) && date >= bas.startDate && date <= bas.endDate;
+}
+function canEdit(bas) {
+	return bas.status !== "LOCKED" && bas.status !== "LODGED";
+}
+function addSaleToBas(bas, date, subtotal, gst, registered) {
+	if (!registered || !canEdit(bas) || !inBasPeriod(bas, date)) return bas;
+	const gst1a = round2(bas.gst1aSalesGst + gst);
+	return {
+		...bas,
+		g1TotalSales: round2(bas.g1TotalSales + subtotal + gst),
+		gst1aSalesGst: gst1a,
+		netGstPayable: round2(gst1a - bas.gst1bPurchaseGstCredits)
+	};
+}
+function addExportToBas(bas, date, gross, feeExpenses) {
+	if (!canEdit(bas) || !inBasPeriod(bas, date)) return bas;
+	return {
+		...bas,
+		g1TotalSales: round2(bas.g1TotalSales + gross),
+		g2ExportSales: round2(bas.g2ExportSales + gross),
+		g11NonCapitalPurchases: round2(bas.g11NonCapitalPurchases + feeExpenses)
+	};
+}
+function addPurchaseToBas(bas, expense, registered) {
+	if (!registered || !canEdit(bas) || !inBasPeriod(bas, expense.date)) return bas;
+	const capital = /equipment|camera/i.test(expense.category);
+	const gst1b = round2(bas.gst1bPurchaseGstCredits + expense.claimableGst);
+	return {
+		...bas,
+		g10CapitalPurchases: round2(bas.g10CapitalPurchases + (capital ? expense.claimableAmount : 0)),
+		g11NonCapitalPurchases: round2(bas.g11NonCapitalPurchases + (capital ? 0 : expense.netAmount * (expense.businessUsePercentage / 100))),
+		gst1bPurchaseGstCredits: gst1b,
+		netGstPayable: round2(bas.gst1aSalesGst - gst1b)
+	};
+}
+function ensureOperating(accounts) {
+	const found = accounts.find((a) => a.type === "transaction") ?? accounts[0];
+	if (found) return {
+		accounts,
+		account: found
+	};
+	const account = {
+		id: "bnk-operating",
+		bankName: "Your bank",
+		accountName: "Operating account",
+		bsb: "",
+		accountNumber: "••••",
+		balance: 0,
+		type: "transaction",
+		lastSynced: todayIso$1()
+	};
+	return {
+		accounts: [account],
+		account
+	};
+}
+function creditAccount(accounts, accountId, amount) {
+	return accounts.map((a) => a.id === accountId ? {
+		...a,
+		balance: round2(a.balance + amount)
+	} : a);
+}
+function paymentJournal(invoice, date, entryNumber) {
+	const gst = round2(invoice.gstTotal);
+	const net = round2(invoice.subtotal);
+	const total = round2(invoice.total);
+	return {
+		id: `jnl-pay-${invoice.id}`,
+		entryNumber,
+		date,
+		reference: `Payment ${invoice.invoiceNumber}`,
+		lines: [
+			{
+				accountId: "1000",
+				accountCode: "1000",
+				accountName: "Cash at bank",
+				debit: total,
+				credit: 0,
+				description: "Invoice paid"
+			},
+			{
+				accountId: "4000",
+				accountCode: "4000",
+				accountName: "Brand and service income",
+				debit: 0,
+				credit: net,
+				description: invoice.invoiceNumber
+			},
+			{
+				accountId: "2100",
+				accountCode: "2100",
+				accountName: "GST collected",
+				debit: 0,
+				credit: gst,
+				description: "GST on the invoice"
+			}
+		].filter((line) => line.debit > 0 || line.credit > 0),
+		totalDebit: total,
+		totalCredit: round2(net + gst),
+		isBalanced: round2(net + gst) === total,
+		isLocked: false,
+		postedAt: (/* @__PURE__ */ new Date()).toISOString()
+	};
+}
+function payoutJournal(input) {
+	const fees = round2(input.platformFee + input.processing + input.commission);
+	return {
+		id: `jnl-${input.id}`,
+		entryNumber: input.entryNumber,
+		date: input.date,
+		reference: `${input.platform} payout`,
+		lines: [
+			{
+				accountId: "1000",
+				accountCode: "1000",
+				accountName: "Cash at bank",
+				debit: input.net,
+				credit: 0,
+				description: "Net deposit"
+			},
+			{
+				accountId: "6500",
+				accountCode: "6500",
+				accountName: "Platform and agency fees",
+				debit: fees,
+				credit: 0,
+				description: "Cuts before the deposit"
+			},
+			{
+				accountId: "4100",
+				accountCode: "4100",
+				accountName: "Platform income",
+				debit: 0,
+				credit: input.gross,
+				description: "Gross fan spend"
+			}
+		],
+		totalDebit: round2(input.net + fees),
+		totalCredit: round2(input.gross),
+		isBalanced: round2(input.net + fees) === round2(input.gross),
+		isLocked: false,
+		postedAt: (/* @__PURE__ */ new Date()).toISOString()
+	};
+}
+function orderJournal(order, entryNumber) {
+	return {
+		id: `jnl-${order.id}`,
+		entryNumber,
+		date: order.date,
+		reference: order.orderNumber,
+		lines: [
+			{
+				accountId: "1000",
+				accountCode: "1000",
+				accountName: "Cash at bank",
+				debit: order.total,
+				credit: 0,
+				description: "Shop sale"
+			},
+			{
+				accountId: "4200",
+				accountCode: "4200",
+				accountName: "Product sales",
+				debit: 0,
+				credit: order.subtotal,
+				description: order.itemsSummary
+			},
+			{
+				accountId: "2100",
+				accountCode: "2100",
+				accountName: "GST collected",
+				debit: 0,
+				credit: order.gstAmount,
+				description: "GST on the sale"
+			}
+		].filter((line) => line.debit > 0 || line.credit > 0),
+		totalDebit: order.total,
+		totalCredit: round2(order.subtotal + order.gstAmount),
+		isBalanced: round2(order.subtotal + order.gstAmount) === round2(order.total),
+		isLocked: false,
+		postedAt: (/* @__PURE__ */ new Date()).toISOString()
+	};
+}
+function nextJournalNumber(existing) {
+	const max = existing.reduce((m, n) => {
+		const parsed = Number(String(n).replace(/\D/g, "").slice(-4));
+		return Number.isFinite(parsed) ? Math.max(m, parsed) : m;
+	}, 0);
+	return `JNL-2026-${String(max + 1).padStart(4, "0")}`;
+}
+/** Australian financial-year quarter that contains today. */
+function currentBasPeriod() {
+	const now = /* @__PURE__ */ new Date();
+	const month = now.getMonth();
+	const year = now.getFullYear();
+	let start;
+	let end;
+	let due;
+	let label;
+	if (month >= 6 && month <= 8) {
+		start = `${year}-07-01`;
+		end = `${year}-09-30`;
+		due = `${year}-10-28`;
+		label = `Q1 ${year}–${year + 1} (1 July – 30 September ${year})`;
+	} else if (month >= 9) {
+		start = `${year}-10-01`;
+		end = `${year}-12-31`;
+		due = `${year + 1}-02-28`;
+		label = `Q2 ${year}–${year + 1} (1 October – 31 December ${year})`;
+	} else if (month <= 2) {
+		const fy = year - 1;
+		start = `${year}-01-01`;
+		end = `${year}-03-31`;
+		due = `${year}-04-28`;
+		label = `Q3 ${fy}–${year} (1 January – 31 March ${year})`;
+	} else {
+		const fy = year - 1;
+		start = `${year}-04-01`;
+		end = `${year}-06-30`;
+		due = `${year}-07-28`;
+		label = `Q4 ${fy}–${year} (1 April – 30 June ${year})`;
+	}
+	return {
+		periodId: `bas-${start}`,
+		label,
+		startDate: start,
+		endDate: end,
+		dueDate: due,
+		status: "OPEN",
+		g1TotalSales: 0,
+		g2ExportSales: 0,
+		g3OtherGSTFree: 0,
+		g10CapitalPurchases: 0,
+		g11NonCapitalPurchases: 0,
+		gst1aSalesGst: 0,
+		gst1bPurchaseGstCredits: 0,
+		netGstPayable: 0,
+		w1TotalWages: 0,
+		w2WithheldAmount: 0,
+		accountantNotes: "Figures update when you invoice, get paid, or record an expense in this quarter."
+	};
+}
 var INITIAL_BUSINESS_IDENTITY = {
 	abn: "51 824 753 556",
 	legalName: "Your business",
@@ -8201,7 +9107,8 @@ var INITIAL_OPERATING_PROFILE = {
 	hasContractors: true,
 	hasEmployees: false,
 	hasInterstateActivity: true,
-	hasOverseasActivity: true
+	hasOverseasActivity: true,
+	industryModule: "creator"
 };
 var INITIAL_CLIENTS = [
 	{
@@ -9141,7 +10048,8 @@ function emptyWorkspace() {
 			hasContractors: false,
 			hasEmployees: false,
 			hasInterstateActivity: false,
-			hasOverseasActivity: false
+			hasOverseasActivity: false,
+			industryModule: "general"
 		},
 		clients: [],
 		bookings: [],
@@ -9151,24 +10059,19 @@ function emptyWorkspace() {
 		orders: [],
 		payouts: [],
 		expenses: [],
-		bankAccounts: [],
+		bankAccounts: [{
+			id: "bnk-operating",
+			bankName: "Your bank",
+			accountName: "Operating account",
+			bsb: "",
+			accountNumber: "••••",
+			balance: 0,
+			type: "transaction",
+			lastSynced: todayIso()
+		}],
 		bankTransactions: [],
 		journalEntries: [],
-		basPeriod: {
-			...SEED_BAS_PERIOD,
-			status: "OPEN",
-			g1TotalSales: 0,
-			g2ExportSales: 0,
-			g3OtherGSTFree: 0,
-			g10CapitalPurchases: 0,
-			g11NonCapitalPurchases: 0,
-			gst1aSalesGst: 0,
-			gst1bPurchaseGstCredits: 0,
-			netGstPayable: 0,
-			w1TotalWages: 0,
-			w2WithheldAmount: 0,
-			accountantNotes: "New books. Figures fill in as you invoice and record expenses."
-		},
+		basPeriod: currentBasPeriod(),
 		obligations: [],
 		documents: []
 	};
@@ -9254,6 +10157,15 @@ function useLedger(userId, demo) {
 			onboarded: true
 		}));
 	}, [patch]);
+	const setIndustry = (0, import_react.useCallback)((industryModule) => {
+		patch((prev) => ({
+			...prev,
+			operatingProfile: {
+				...prev.operatingProfile,
+				industryModule
+			}
+		}));
+	}, [patch]);
 	const restartOnboarding = (0, import_react.useCallback)(() => {
 		patch((prev) => ({
 			...prev,
@@ -9276,6 +10188,12 @@ function useLedger(userId, demo) {
 			clients: [...prev.clients, client]
 		}));
 	}, [patch]);
+	const addQuote = (0, import_react.useCallback)((quote) => {
+		patch((prev) => ({
+			...prev,
+			quotes: [quote, ...prev.quotes]
+		}));
+	}, [patch]);
 	const updateBookingStatus = (0, import_react.useCallback)((bookingId, status) => {
 		patch((prev) => ({
 			...prev,
@@ -9288,13 +10206,14 @@ function useLedger(userId, demo) {
 	const addInvoice = (0, import_react.useCallback)((invoice) => {
 		patch((prev) => ({
 			...prev,
-			invoices: [invoice, ...prev.invoices]
+			invoices: [invoice, ...prev.invoices],
+			basPeriod: prev.taxProfile.accountingBasis === "accruals" ? addSaleToBas(prev.basPeriod, invoice.issueDate, invoice.subtotal, invoice.gstTotal, prev.taxProfile.gstRegistered) : prev.basPeriod
 		}));
 	}, [patch]);
 	const addExpense = (0, import_react.useCallback)((expense) => {
 		patch((prev) => {
-			const account = prev.bankAccounts.find((a) => a.type === "transaction") ?? prev.bankAccounts[0];
-			const txn = account ? {
+			const { accounts, account } = ensureOperating(prev.bankAccounts);
+			const txn = {
 				id: `txn-${expense.id}`,
 				bankAccountId: account.id,
 				date: expense.date,
@@ -9303,19 +10222,17 @@ function useLedger(userId, demo) {
 				status: "CATEGORISED",
 				matchedType: "expense",
 				matchedId: expense.id
-			} : null;
+			};
 			return {
 				...prev,
 				expenses: [{
 					...expense,
-					bankTransactionId: txn?.id,
+					bankTransactionId: txn.id,
 					isReconciled: false
 				}, ...prev.expenses],
-				bankTransactions: txn ? [txn, ...prev.bankTransactions] : prev.bankTransactions,
-				bankAccounts: account ? prev.bankAccounts.map((a) => a.id === account.id ? {
-					...a,
-					balance: Math.round((a.balance - expense.grossAmount) * 100) / 100
-				} : a) : prev.bankAccounts,
+				bankTransactions: [txn, ...prev.bankTransactions],
+				bankAccounts: creditAccount(accounts, account.id, -Math.abs(expense.grossAmount)),
+				basPeriod: addPurchaseToBas(prev.basPeriod, expense, prev.taxProfile.gstRegistered),
 				documents: expense.receiptName ? [{
 					id: `doc-${expense.id}`,
 					title: expense.receiptName,
@@ -9355,10 +10272,88 @@ function useLedger(userId, demo) {
 			products: [product, ...prev.products]
 		}));
 	}, [patch]);
+	const addOrder = (0, import_react.useCallback)((order, productId) => {
+		patch((prev) => {
+			const { accounts, account } = ensureOperating(prev.bankAccounts);
+			const txn = {
+				id: `txn-${order.id}`,
+				bankAccountId: account.id,
+				date: order.date,
+				description: `Sale ${order.orderNumber} — ${order.customerName}`,
+				amount: order.total,
+				status: "MATCHED",
+				matchedId: order.id,
+				notes: order.itemsSummary
+			};
+			const entry = orderJournal(order, nextJournalNumber(prev.journalEntries.map((j) => j.entryNumber)));
+			return {
+				...prev,
+				orders: [order, ...prev.orders],
+				products: productId ? prev.products.map((p) => p.id === productId && p.inventoryEnabled ? {
+					...p,
+					inventoryQuantity: Math.max(0, p.inventoryQuantity - 1)
+				} : p) : prev.products,
+				bankTransactions: [txn, ...prev.bankTransactions],
+				bankAccounts: creditAccount(accounts, account.id, order.total),
+				journalEntries: [entry, ...prev.journalEntries],
+				basPeriod: addSaleToBas(prev.basPeriod, order.date, order.subtotal, order.gstAmount, prev.taxProfile.gstRegistered)
+			};
+		});
+	}, [patch]);
 	const addPayout = (0, import_react.useCallback)((payout) => {
+		patch((prev) => {
+			const { accounts, account } = ensureOperating(prev.bankAccounts);
+			const txn = {
+				id: `txn-${payout.id}`,
+				bankAccountId: account.id,
+				date: payout.depositDate,
+				description: `${payout.platform} payout`,
+				amount: round2(payout.netPayout),
+				status: "MATCHED",
+				matchedType: "payout",
+				matchedId: payout.id
+			};
+			const entry = payoutJournal({
+				id: payout.id,
+				platform: payout.platform,
+				date: payout.depositDate,
+				gross: payout.grossRevenue,
+				platformFee: payout.platformFee,
+				processing: payout.paymentProcessingFee,
+				commission: payout.managementCommission,
+				net: round2(payout.netPayout),
+				entryNumber: nextJournalNumber(prev.journalEntries.map((j) => j.entryNumber))
+			});
+			return {
+				...prev,
+				payouts: [{
+					...payout,
+					bankTransactionId: txn.id,
+					status: "deposited"
+				}, ...prev.payouts],
+				bankTransactions: [txn, ...prev.bankTransactions],
+				bankAccounts: creditAccount(accounts, account.id, payout.netPayout),
+				journalEntries: [entry, ...prev.journalEntries],
+				basPeriod: addExportToBas(prev.basPeriod, payout.depositDate, payout.grossRevenue, round2(payout.platformFee + payout.paymentProcessingFee + payout.managementCommission))
+			};
+		});
+	}, [patch]);
+	const applyRegister = (0, import_react.useCallback)((hit) => {
 		patch((prev) => ({
 			...prev,
-			payouts: [payout, ...prev.payouts]
+			business: {
+				...prev.business,
+				legalName: hit.legalName || prev.business.legalName,
+				entityType: hit.entityType ?? prev.business.entityType,
+				businessAddress: hit.location || prev.business.businessAddress,
+				status: "active",
+				abnLastVerifiedAt: (/* @__PURE__ */ new Date()).toISOString(),
+				abrLastCheckedAt: (/* @__PURE__ */ new Date()).toISOString()
+			},
+			taxProfile: {
+				...prev.taxProfile,
+				gstRegistered: hit.gstRegistered
+			}
 		}));
 	}, [patch]);
 	const lockBasPeriod = (0, import_react.useCallback)(() => {
@@ -9468,9 +10463,9 @@ function useLedger(userId, demo) {
 		patch((prev) => {
 			const invoice = prev.invoices.find((i) => i.id === invoiceId);
 			if (!invoice || invoice.status === "paid") return prev;
-			const account = prev.bankAccounts.find((a) => a.type === "transaction") ?? prev.bankAccounts[0];
+			const { accounts, account } = ensureOperating(prev.bankAccounts);
 			const paidDate = todayIso();
-			const txn = account ? {
+			const txn = {
 				id: `txn-pay-${invoice.id}`,
 				bankAccountId: account.id,
 				date: paidDate,
@@ -9479,7 +10474,9 @@ function useLedger(userId, demo) {
 				status: "MATCHED",
 				matchedType: "invoice",
 				matchedId: invoice.id
-			} : null;
+			};
+			const entry = paymentJournal(invoice, paidDate, nextJournalNumber(prev.journalEntries.map((j) => j.entryNumber)));
+			const basPeriod = prev.taxProfile.accountingBasis === "cash" ? addSaleToBas(prev.basPeriod, paidDate, invoice.subtotal, invoice.gstTotal, prev.taxProfile.gstRegistered) : prev.basPeriod;
 			return {
 				...prev,
 				invoices: prev.invoices.map((i) => i.id === invoiceId ? {
@@ -9497,11 +10494,10 @@ function useLedger(userId, demo) {
 					...b,
 					status: "paid"
 				} : b),
-				bankTransactions: txn ? [txn, ...prev.bankTransactions] : prev.bankTransactions,
-				bankAccounts: account ? prev.bankAccounts.map((a) => a.id === account.id ? {
-					...a,
-					balance: Math.round((a.balance + invoice.total) * 100) / 100
-				} : a) : prev.bankAccounts
+				bankTransactions: [txn, ...prev.bankTransactions],
+				bankAccounts: creditAccount(accounts, account.id, invoice.total),
+				journalEntries: [entry, ...prev.journalEntries],
+				basPeriod
 			};
 		});
 	}, [patch]);
@@ -9510,20 +10506,24 @@ function useLedger(userId, demo) {
 		ready,
 		patch,
 		completeOnboarding,
+		setIndustry,
 		restartOnboarding,
 		resetDemo,
 		addBooking,
 		addClient,
+		addQuote,
 		updateBookingStatus,
 		addInvoice,
 		addExpense,
 		reconcileTransaction,
 		addJournalEntry,
 		addProduct,
+		addOrder,
 		addPayout,
 		lockBasPeriod,
 		updateObligation,
 		addDocument,
+		applyRegister,
 		convertBookingToInvoice,
 		convertQuoteToInvoice,
 		markInvoicePaid
@@ -9541,22 +10541,25 @@ function TalentLanding({ onSignUp, onSample }) {
 						className: "mb-10 flex items-center gap-4",
 						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
 							className: "font-display text-4xl font-extrabold leading-none tracking-[-0.05em] text-ink sm:text-5xl",
-							children: ["Talent", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+							children: ["talent", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 								className: "brand-gradient-text",
 								children: "OS"
 							})]
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-							className: "border-l border-accent/30 pl-3 text-sm font-semibold leading-tight text-accent sm:text-base",
+							className: "border-l border-accent/30 pl-3 text-sm font-semibold leading-tight text-ink sm:text-base",
 							children: [
-								"business,",
+								"by cdxi",
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("br", {}),
-								" sorted"
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: "font-medium text-accent",
+									children: "business, sorted"
+								})
 							]
 						})]
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "mb-5 text-sm font-bold uppercase tracking-[0.18em] text-accent",
-						children: "For independent talent"
+						children: "For Australian sole traders"
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", {
 						className: "max-w-xl text-balance font-display text-4xl font-bold leading-[1.05] tracking-[-0.04em] text-ink sm:text-6xl",
@@ -9564,7 +10567,7 @@ function TalentLanding({ onSignUp, onSample }) {
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "mt-6 max-w-lg text-pretty text-base leading-7 text-muted sm:text-lg",
-						children: "Bookings, invoices, GST, and the BAS — in one place, in plain language. Open Kira’s sample studio, or start your own books."
+						children: "Jobs, invoices, GST, and the BAS — for any sole trader. The sample studio is a creator. Your own books follow the trade you pick."
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "mt-8 flex flex-col gap-3 sm:flex-row sm:items-center",
@@ -9589,7 +10592,7 @@ function TalentLanding({ onSignUp, onSample }) {
 					[
 						"01",
 						"See a real set of books",
-						"Brand deals, platform payouts, GST and a BAS already in motion."
+						"A creator’s sample: brand deals, GST, and a BAS already in motion."
 					],
 					[
 						"02",
@@ -9627,7 +10630,11 @@ function AppContent() {
 	const books = useLedger(user?.id ?? null, Boolean(user?.demo));
 	const [activeTab, setActiveTab] = (0, import_react.useState)("dashboard");
 	const [moneySection, setMoneySection] = (0, import_react.useState)("expenses");
-	const [mobileMenuOpen, setMobileMenuOpen] = (0, import_react.useState)(false);
+	const [launch, setLaunch] = (0, import_react.useState)({
+		kind: "booking",
+		n: 0
+	});
+	const [moreOpen, setMoreOpen] = (0, import_react.useState)(false);
 	const [assistantOpen, setAssistantOpen] = (0, import_react.useState)(false);
 	const [settingsOpen, setSettingsOpen] = (0, import_react.useState)(false);
 	const [settingsTab, setSettingsTab] = (0, import_react.useState)("theme");
@@ -9635,6 +10642,14 @@ function AppContent() {
 	const { business, creator, taxProfile, operatingProfile, clients, bookings, quotes, invoices, products, orders, payouts, expenses, bankAccounts, bankTransactions, journalEntries, basPeriod, obligations, documents, ready } = books;
 	const annualRevenue = bookings.reduce((acc, b) => acc + b.fee, 0) + payouts.reduce((acc, p) => acc + p.grossRevenue, 0);
 	const annualTaxableIncome = invoices.filter((i) => i.status === "paid").reduce((acc, i) => acc + i.subtotal, 0) + payouts.reduce((acc, p) => acc + p.netPayout, 0) + orders.filter((o) => o.status !== "refunded").reduce((acc, o) => acc + o.subtotal, 0) - expenses.reduce((acc, e) => acc + e.claimableAmount, 0);
+	const trade = industryById(operatingProfile.industryModule);
+	(0, import_react.useEffect)(() => {
+		applyIndustryTheme(user ? operatingProfile.industryModule : "creator");
+	}, [
+		user,
+		operatingProfile.industryModule,
+		theme
+	]);
 	const navItems = [
 		{
 			id: "dashboard",
@@ -9643,7 +10658,7 @@ function AppContent() {
 		},
 		{
 			id: "bookings",
-			label: "Bookings",
+			label: `${trade.jobNoun}s`,
 			icon: Calendar,
 			badge: bookings.length
 		},
@@ -9687,16 +10702,23 @@ function AppContent() {
 		className: "grid min-h-screen place-items-center bg-canvas text-ink",
 		children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 			className: "text-center",
-			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-				className: "font-display text-3xl font-extrabold tracking-tight",
-				children: ["Talent", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-					className: "brand-gradient-text",
-					children: "OS"
-				})]
-			}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-				className: "mt-2 text-sm text-muted",
-				children: "Opening your books…"
-			})]
+			children: [
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+					className: "font-display text-3xl font-extrabold tracking-tight",
+					children: ["talent", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+						className: "brand-gradient-text",
+						children: "OS"
+					})]
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+					className: "mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted",
+					children: "by cdxi"
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+					className: "mt-2 text-sm text-muted",
+					children: "Opening your books…"
+				})
+			]
 		})
 	});
 	if (!user) return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(TalentLanding, {
@@ -9733,33 +10755,37 @@ function AppContent() {
 				}
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("header", {
-				className: "sticky top-0 z-40 flex min-h-16 items-center justify-between gap-3 border-b border-neutral-800 bg-canvas/85 px-4 py-3 backdrop-blur-2xl sm:px-5",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "flex items-center gap-3",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-						onClick: () => setMobileMenuOpen(!mobileMenuOpen),
-						className: "rounded-lg p-2 text-muted transition-colors hover:bg-[color:rgba(20,22,29,0.06)] hover:text-ink lg:hidden",
-						"aria-label": "Toggle navigation menu",
-						children: mobileMenuOpen ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-5 w-5" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Menu, { className: "h-5 w-5" })
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-						className: "flex items-center gap-3",
-						onClick: () => setActiveTab("dashboard"),
-						"aria-label": "TalentOS",
+				className: "sticky top-0 z-40 flex min-h-16 items-center justify-between gap-3 border-b border-neutral-800 bg-canvas/90 px-4 py-2.5 backdrop-blur-2xl sm:px-5",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+					className: "flex min-w-0 flex-1 items-center gap-3 text-left",
+					onClick: () => setActiveTab("dashboard"),
+					"aria-label": "talentOS by cdxi",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+						className: "grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-accent font-display text-lg font-bold text-[#fff] shadow-[0_8px_20px_-8px_var(--color-accent)]",
+						children: "t"
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+						className: "min-w-0",
 						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-							className: "font-display text-2xl font-extrabold leading-none tracking-[-0.04em] sm:text-3xl",
+							className: "block font-display text-[1.65rem] font-extrabold leading-none tracking-[-0.05em]",
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 								className: "text-ink",
-								children: "Talent"
+								children: "talent"
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 								className: "brand-gradient-text",
 								children: "OS"
 							})]
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-							className: "hidden border-l border-accent/30 pl-3 text-sm font-semibold leading-tight tracking-wide text-accent sm:block",
+							className: "mt-1 block truncate text-[11px] font-semibold leading-none text-muted",
 							children: [
-								"business,",
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("br", {}),
-								" sorted"
+								"by cdxi",
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: "text-faint",
+									children: " · "
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: "text-accent",
+									children: trade.label
+								})
 							]
 						})]
 					})]
@@ -9922,46 +10948,93 @@ function AppContent() {
 							})]
 						})]
 					}),
-					mobileMenuOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "fixed inset-0 z-50 flex flex-col justify-between bg-canvas p-6 lg:hidden",
-						children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "space-y-4",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex items-center justify-between border-b border-[color:rgba(20,22,29,0.08)] pb-4",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-									className: "font-display text-lg font-extrabold",
-									children: ["Talent", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+					moreOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "fixed inset-0 z-50 lg:hidden",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+							className: "absolute inset-0 bg-black/45",
+							"aria-label": "Close menu",
+							onClick: () => setMoreOpen(false)
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.25rem)] max-h-[78vh] overflow-y-auto rounded-t-3xl border border-neutral-800 bg-canvas px-4 pb-4 pt-3 shadow-2xl",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "mx-auto mb-4 h-1 w-10 rounded-full bg-neutral-700" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+									className: "font-display text-2xl font-extrabold leading-none tracking-[-0.04em]",
+									children: ["talent", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 										className: "brand-gradient-text",
 										children: "OS"
 									})]
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-									onClick: () => setMobileMenuOpen(false),
-									"aria-label": "Close menu",
-									className: "p-2 text-muted",
-									children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-6 w-6" })
-								})]
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "space-y-1",
-								children: navItems.map((item) => {
-									const Icon = item.icon;
-									const isActive = activeTab === item.id;
-									return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-										onClick: () => {
-											setActiveTab(item.id);
-											setMobileMenuOpen(false);
-										},
-										className: `flex w-full items-center justify-between rounded-xl p-3 text-sm font-medium ${isActive ? "bg-accent-soft text-accent" : "text-muted"}`,
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-											className: "flex items-center gap-3",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Icon, { className: "h-5 w-5" }), item.label]
-										}), item.badge !== void 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "text-xs tabular-nums",
-											children: item.badge
-										})]
-									}, item.id);
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "mt-1 text-xs font-semibold text-muted",
+									children: "by cdxi · the colour follows your industry"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "mb-2 mt-4 text-[10px] font-bold uppercase tracking-[0.16em] text-faint",
+									children: "Industry"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "grid grid-cols-2 gap-2",
+									children: INDUSTRIES.map((item) => {
+										const selected = trade.id === item.id;
+										return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											type: "button",
+											onClick: () => books.setIndustry(item.id),
+											className: `flex min-h-11 items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs font-semibold ${selected ? "border-accent bg-accent-soft text-accent" : "border-neutral-800 text-ink"}`,
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "h-3 w-3 shrink-0 rounded-full",
+												style: { background: industryAccent(item.id) }
+											}), item.label]
+										}, item.id);
+									})
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "mt-4 grid grid-cols-2 gap-2",
+									children: [
+										[
+											"compliance",
+											"Tax",
+											ShieldCheck
+										],
+										[
+											"sales",
+											"Sales",
+											ShoppingBag
+										],
+										[
+											"files",
+											"Files",
+											FolderClosed
+										],
+										[
+											"accountant",
+											"Accountant",
+											Briefcase
+										]
+									].map(([id, label, Icon]) => {
+										return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											type: "button",
+											onClick: () => {
+												setActiveTab(id);
+												setMoreOpen(false);
+											},
+											className: `flex min-h-12 items-center gap-2 rounded-xl px-3 text-sm font-semibold ${activeTab === id ? "bg-accent-soft text-accent" : "bg-neutral-900 text-ink"}`,
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Icon, { className: "h-4 w-4" }), label]
+										}, id);
+									})
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									type: "button",
+									onClick: () => {
+										setSettingsTab("theme");
+										setSettingsOpen(true);
+										setMoreOpen(false);
+									},
+									className: "mt-2 flex min-h-12 w-full items-center gap-2 rounded-xl bg-neutral-900 px-3 text-sm font-semibold text-ink",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Settings, { className: "h-4 w-4" }), " Settings"]
 								})
-							})]
-						})
+							]
+						})]
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("main", {
 						className: "relative flex-1 overflow-y-auto bg-transparent p-3 pb-24 sm:p-5 lg:p-8 lg:pb-8",
@@ -9990,12 +11063,23 @@ function AppContent() {
 										setActiveTab(tab);
 									},
 									onOpenQuickAdd: (type) => {
-										if (type === "booking") setActiveTab("bookings");
-										else if (type === "invoice") setActiveTab("invoices");
-										else if (type === "sale") setActiveTab("sales");
+										if (type === "booking") {
+											setLaunch((prev) => ({
+												kind: "booking",
+												n: prev.n + 1
+											}));
+											setActiveTab("bookings");
+										} else if (type === "invoice") {
+											setLaunch((prev) => ({
+												kind: "invoice",
+												n: prev.n + 1
+											}));
+											setActiveTab("invoices");
+										} else if (type === "sale") setActiveTab("sales");
 										else setActiveTab("money");
 									},
-									onOpenAssistant: () => setAssistantOpen(true)
+									onOpenAssistant: () => setAssistantOpen(true),
+									industryModule: operatingProfile.industryModule
 								}),
 								activeTab === "bookings" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(BookingsView, {
 									clients,
@@ -10004,6 +11088,7 @@ function AppContent() {
 									taxProfile,
 									onAddBooking: books.addBooking,
 									onAddClient: books.addClient,
+									onAddQuote: books.addQuote,
 									onUpdateBookingStatus: books.updateBookingStatus,
 									onConvertToInvoice: (booking) => {
 										books.convertBookingToInvoice(booking);
@@ -10012,15 +11097,18 @@ function AppContent() {
 									onConvertQuoteToInvoice: (quote) => {
 										books.convertQuoteToInvoice(quote);
 										setActiveTab("invoices");
-									}
-								}),
+									},
+									launchToken: launch.kind === "booking" ? launch.n : 0,
+									industryModule: operatingProfile.industryModule
+								}, operatingProfile.industryModule ?? "creator"),
 								activeTab === "sales" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(SalesView, {
 									products,
 									orders,
 									payouts,
 									taxProfile,
 									onAddProduct: books.addProduct,
-									onAddPayout: books.addPayout
+									onAddPayout: books.addPayout,
+									onAddOrder: books.addOrder
 								}),
 								activeTab === "invoices" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(InvoicesView, {
 									invoices,
@@ -10028,7 +11116,9 @@ function AppContent() {
 									business,
 									taxProfile,
 									onAddInvoice: books.addInvoice,
-									onMarkInvoicePaid: books.markInvoicePaid
+									onMarkInvoicePaid: books.markInvoicePaid,
+									bankAccounts,
+									launchToken: launch.kind === "invoice" ? launch.n : 0
 								}),
 								activeTab === "money" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(MoneyView, {
 									bankAccounts,
@@ -10050,7 +11140,9 @@ function AppContent() {
 									annualRevenue,
 									annualTaxableIncome: Math.max(0, Math.round(annualTaxableIncome)),
 									onLockBASPeriod: books.lockBasPeriod,
-									onUpdateObligation: books.updateObligation
+									onUpdateObligation: books.updateObligation,
+									activityAfterPeriod: invoices.filter((i) => i.issueDate > basPeriod.endDate).length + expenses.filter((e) => e.date > basPeriod.endDate).length + payouts.filter((p) => p.depositDate > basPeriod.endDate).length + orders.filter((o) => o.date > basPeriod.endDate).length,
+									onApplyRegister: books.applyRegister
 								}),
 								activeTab === "files" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(FilesView, {
 									documents,
@@ -10085,7 +11177,7 @@ function AppContent() {
 						],
 						[
 							"bookings",
-							"Jobs",
+							trade.jobNoun + "s",
 							Calendar
 						],
 						[
@@ -10099,15 +11191,32 @@ function AppContent() {
 							Landmark
 						],
 						[
-							"compliance",
-							"Tax",
-							ShieldCheck
+							"more",
+							"More",
+							Menu
 						]
 					].map(([id, label, Icon]) => {
+						const moreActive = [
+							"sales",
+							"compliance",
+							"files",
+							"accountant"
+						].includes(activeTab);
+						const active = id === "more" ? moreOpen || moreActive : activeTab === id && !moreOpen;
 						return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-							onClick: () => setActiveTab(id),
-							className: `flex min-h-14 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold ${activeTab === id ? "text-accent" : "text-muted"}`,
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Icon, { className: "h-5 w-5" }), label]
+							onClick: () => {
+								if (id === "more") {
+									setMoreOpen((open) => !open);
+									return;
+								}
+								setMoreOpen(false);
+								setActiveTab(id);
+							},
+							className: `flex min-h-14 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold ${active ? "text-accent" : "text-muted"}`,
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: `grid h-7 w-14 place-items-center rounded-full ${active ? "bg-accent-soft" : ""}`,
+								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Icon, { className: "h-5 w-5" })
+							}), label]
 						}, id);
 					})
 				})
@@ -10125,6 +11234,9 @@ function AppContent() {
 				taxProfile,
 				onOpenAuth: () => setAuthOpen(true),
 				onRestartOnboarding: books.restartOnboarding,
+				onApplyRegister: books.applyRegister,
+				industryId: trade.id,
+				onIndustryChange: books.setIndustry,
 				initialTab: settingsTab
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(AuthModal, {

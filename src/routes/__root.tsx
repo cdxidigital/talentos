@@ -3,7 +3,7 @@ import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import appCss from "../styles.css?url";
 
-const APP_NAME = "TalentOS";
+const APP_NAME = "talentOS";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -13,9 +13,12 @@ export const Route = createRootRoute({
       { title: APP_NAME },
       {
         name: "description",
-        content: "TalentOS keeps bookings, invoices, GST and BAS in one calm place for Australian creators.",
+        content: "talentOS by cdxi. Jobs, invoices, GST and BAS for Australian sole traders.",
       },
-      { name: "theme-color", content: "#f4f6fb" },
+      { name: "theme-color", content: "#7434d1" },
+      { name: "application-name", content: "talentOS" },
+      { name: "author", content: "cdxi" },
+      { name: "apple-mobile-web-app-title", content: "talentOS" },
     ],
     links: [
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },

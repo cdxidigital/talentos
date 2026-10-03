@@ -38,6 +38,7 @@ import type {
   Quote,
   TaxProfile,
 } from "../types";
+import { currentBasPeriod } from "./books";
 
 export interface Workspace {
   onboarded: boolean;
@@ -103,6 +104,7 @@ export function emptyWorkspace(): Workspace {
       hasEmployees: false,
       hasInterstateActivity: false,
       hasOverseasActivity: false,
+      industryModule: "general",
     },
     clients: [],
     bookings: [],
@@ -112,24 +114,21 @@ export function emptyWorkspace(): Workspace {
     orders: [],
     payouts: [],
     expenses: [],
-    bankAccounts: [],
+    bankAccounts: [
+      {
+        id: "bnk-operating",
+        bankName: "Your bank",
+        accountName: "Operating account",
+        bsb: "",
+        accountNumber: "••••",
+        balance: 0,
+        type: "transaction",
+        lastSynced: todayIso(),
+      },
+    ],
     bankTransactions: [],
     journalEntries: [],
-    basPeriod: {
-      ...SEED_BAS_PERIOD,
-      status: "OPEN",
-      g1TotalSales: 0,
-      g2ExportSales: 0,
-      g3OtherGSTFree: 0,
-      g10CapitalPurchases: 0,
-      g11NonCapitalPurchases: 0,
-      gst1aSalesGst: 0,
-      gst1bPurchaseGstCredits: 0,
-      netGstPayable: 0,
-      w1TotalWages: 0,
-      w2WithheldAmount: 0,
-      accountantNotes: "New books. Figures fill in as you invoice and record expenses.",
-    },
+    basPeriod: currentBasPeriod(),
     obligations: [],
     documents: [],
   };

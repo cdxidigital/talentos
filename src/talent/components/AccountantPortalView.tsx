@@ -181,15 +181,17 @@ export const AccountantPortalView: React.FC<AccountantPortalViewProps> = ({
         </div>
 
         <div className="p-4 rounded-xl bg-neutral-900 border border-neutral-800">
-          <span className="text-xs text-neutral-400">General Ledger Balance</span>
-          <div className="text-xl font-bold text-white mt-1 font-mono">100% BALANCED</div>
-          <div className="text-[11px] text-emerald-400 mt-1">All {journalEntries.length} journals in balance</div>
+          <span className="text-xs text-neutral-400">General ledger</span>
+          <div className="text-xl font-bold text-white mt-1 font-mono">
+            {journalEntries.length === 0 ? "No journals yet" : journalEntries.every((j) => j.isBalanced) ? "Balanced" : "Out of balance"}
+          </div>
+          <div className="text-[11px] text-neutral-400 mt-1">{journalEntries.filter((j) => j.isBalanced).length} of {journalEntries.length} journals balance</div>
         </div>
 
         <div className="p-4 rounded-xl bg-neutral-900 border border-neutral-800">
-          <span className="text-xs text-neutral-400">Audit & Evidence Status</span>
-          <div className="text-xl font-bold text-amber-300 mt-1">2 Pending Vouchers</div>
-          <div className="text-[11px] text-neutral-400 mt-1">94% substantiated</div>
+          <span className="text-xs text-neutral-400">Still to check</span>
+          <div className="text-xl font-bold text-amber-300 mt-1">{bankTransactions.filter((t) => t.status !== "MATCHED").length}</div>
+          <div className="text-[11px] text-neutral-400 mt-1">Bank lines not matched to a payment</div>
         </div>
       </div>
 
@@ -197,19 +199,45 @@ export const AccountantPortalView: React.FC<AccountantPortalViewProps> = ({
       <div className="p-6 rounded-2xl bg-neutral-900 border border-neutral-800 space-y-4">
         <h3 className="font-semibold text-white text-base">Accountant Sign-Off & Verification Checklist</h3>
         <p className="text-xs text-neutral-400">
-          Verify these statutory items prior to BAS lodgement and annual company tax return preparation.
+          Check these against the books in this browser before anyone lodges. Nothing here is sent to the ATO.
         </p>
 
         <div className="space-y-2 text-xs">
           {[
-            { label: 'Bank Statement Reconciliation', detail: 'Verify Up Bank and CommBank closing balances match ledger accounts.', verified: true },
-            { label: 'Platform Payout Unbundling', detail: 'Confirm gross subscriber revenue, platform cuts (20%), and wire fees are separated.', verified: true },
-            { label: 'GST-Free Export Classification', detail: 'Check overseas subscriber portion of Patreon & OnlyFans revenue under GST Act s 38-190.', verified: false },
-            { label: 'Motor Vehicle & Mobile Private Use Apportionment', detail: 'Verify 4-week mobile log substantiates 70% business claim.', verified: true },
-            { label: 'Capital Equipment Depreciation (Sony FX3)', detail: 'Assess eligibility under Small Business Instant Asset Write-Off vs depreciation.', verified: true },
-            { label: 'Worker Classification & 12% Super Guarantee', detail: 'Confirm videographer & assistant contracts are genuinely independent.', verified: false }
-          ].map((item, idx) => (
-            <div key={idx} className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-between">
+            {
+              label: "Journals",
+              detail: journalEntries.length === 0 ? "No journals yet." : journalEntries.every((j) => j.isBalanced) ? "Every journal balances." : "At least one journal does not balance.",
+              verified: journalEntries.length > 0 && journalEntries.every((j) => j.isBalanced),
+            },
+            {
+              label: "Bank lines",
+              detail: "Money you recorded in the operating account. There is no live bank feed to reconcile against.",
+              verified: false,
+            },
+            {
+              label: "GST",
+              detail: taxProfile.gstRegistered ? `Registered. 1A ${formatAUD(basPeriod.gst1aSalesGst)} and 1B ${formatAUD(basPeriod.gst1bPurchaseGstCredits)} on ${basPeriod.label}.` : "Not registered for GST.",
+              verified: false,
+            },
+            {
+              label: "BAS period",
+              detail: `${basPeriod.label} is ${basPeriod.status}. Lodging stays with you or your agent.`,
+              verified: basPeriod.status === "LOCKED" || basPeriod.status === "LODGED",
+            },
+            ...(payouts.length
+              ? [{
+                  label: "Platform payouts",
+                  detail: `${payouts.length} payout${payouts.length === 1 ? "" : "s"} recorded, with fees kept separate from the net deposit.`,
+                  verified: true,
+                }]
+              : []),
+            {
+              label: "Expenses",
+              detail: expenses.length ? `${expenses.length} expense${expenses.length === 1 ? "" : "s"} in the books.` : "No expenses recorded.",
+              verified: expenses.length > 0,
+            },
+          ].map((item) => (
+            <div key={item.label} className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-between">
               <div>
                 <div className="font-semibold text-white flex items-center gap-2">
                   <span>{item.label}</span>

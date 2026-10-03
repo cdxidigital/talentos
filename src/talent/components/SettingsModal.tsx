@@ -20,6 +20,11 @@ import {
   FileCheck
 } from 'lucide-react';
 import { BusinessIdentity, TaxProfile } from '../types';
+import { validateAustralianABN } from '../utils/taxAndRegulatoryEngine';
+import { AbnCheck } from './AbnCheck';
+import type { AbrLookup } from '../abr.functions';
+import { INDUSTRIES, industryById, type IndustryModule } from '../lib/industries';
+import { industryAccent } from '../lib/industryTheme';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -28,6 +33,9 @@ interface SettingsModalProps {
   taxProfile: TaxProfile;
   onOpenAuth: () => void;
   onRestartOnboarding: () => void;
+  onApplyRegister?: (hit: AbrLookup) => void;
+  industryId?: string;
+  onIndustryChange?: (id: IndustryModule) => void;
   initialTab?: 'theme' | 'notifications';
 }
 
@@ -38,6 +46,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   taxProfile,
   onOpenAuth,
   onRestartOnboarding,
+  onApplyRegister,
+  industryId,
+  onIndustryChange,
   initialTab = 'theme'
 }) => {
   const {
@@ -185,7 +196,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             }`}
           >
             <User className="w-4 h-4" />
-            <span>Cloud Account & Auth</span>
+            <span>Account</span>
           </button>
           <button
             onClick={() => setActiveTab('compliance')}
@@ -286,6 +297,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </button>
               </div>
 
+              {onIndustryChange && (
+                <div>
+                  <h3 className="text-sm font-semibold text-white">Industry colour</h3>
+                  <p className="mt-0.5 text-xs text-neutral-400">
+                    talentOS by cdxi takes its colour from the trade on the books. Job names change with it.
+                  </p>
+                  <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {INDUSTRIES.map((item) => {
+                      const selected = industryById(industryId).id === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => onIndustryChange(item.id)}
+                          className={`flex min-h-11 items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs font-semibold ${
+                            selected ? "border-accent bg-accent-soft text-accent" : "border-neutral-800 text-ink"
+                          }`}
+                        >
+                          <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: industryAccent(item.id) }} />
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Theme Preview Card */}
               <div className="p-4 rounded-xl bg-neutral-950 border border-neutral-800 space-y-2">
                 <div className="flex items-center justify-between text-xs">
@@ -362,9 +400,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {activeTab === 'account' && (
             <div className="space-y-5">
               <div>
-                <h3 className="text-sm font-semibold text-white">Creator Cloud Authentication</h3>
+                <h3 className="text-sm font-semibold text-white">This browser</h3>
                 <p className="text-xs text-neutral-400 mt-0.5">
-                  Manage your authenticated session and secure Neon database connection.
+                  Your books stay on this device. Signing in keeps a separate set of books here. Nothing is uploaded to a cloud database.
                 </p>
               </div>
 
@@ -409,20 +447,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div className="pt-3 border-t border-neutral-800/80 grid grid-cols-2 gap-3 text-xs">
                     <div>
                       <span className="text-neutral-500 block text-[10px] uppercase font-mono">
-                        Database Engine:
+                        Where the books live:
                       </span>
                       <span className="text-neutral-300 font-mono text-[11px] flex items-center gap-1 mt-0.5">
                         <Database className="w-3.5 h-3.5 text-emerald-400" />
-                        Neon Postgres
+                        This browser
                       </span>
                     </div>
                     <div>
                       <span className="text-neutral-500 block text-[10px] uppercase font-mono">
-                        Sync Integrity:
+                        Sync:
                       </span>
                       <span className="text-emerald-400 font-mono text-[11px] flex items-center gap-1 mt-0.5">
                         <CheckCircle className="w-3.5 h-3.5" />
-                        Live Security Hardened
+                        Saved locally
                       </span>
                     </div>
                   </div>
@@ -437,7 +475,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       You are currently browsing with Local Workspace Storage
                     </h4>
                     <p className="text-[11px] text-neutral-400 max-w-md mx-auto mt-1">
-                      Sign in or create an account to securely sync your Australian Business Number records, invoices, bookings, and Lex AI history across all your devices.
+                      Sign in to keep your own books separate from the sample studio. They stay in this browser.
                     </p>
                   </div>
                   <button
@@ -487,7 +525,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div>
                 <h3 className="text-sm font-semibold text-white">Registered Entity Profile</h3>
                 <p className="text-xs text-neutral-400 mt-0.5">
-                  Statutory details verified against Australian Business Register (ABR) Modulus-89 criteria.
+                  The checksum is instant. Check the register to read the public ABN Lookup record.
                 </p>
               </div>
 
@@ -506,7 +544,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     Australian Business Number
                   </span>
                   <div className="font-semibold text-emerald-400 font-mono text-xs">
-                    ABN {business.abn} (Valid Mod-89)
+                    ABN {business.abn || "—"} ({validateAustralianABN(business.abn || "").isValid ? "checksum passes" : "not a valid ABN"})
                   </div>
                 </div>
 
@@ -528,6 +566,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 </div>
               </div>
+
+              <AbnCheck
+                abn={business.abn}
+                booksName={business.legalName}
+                onUse={onApplyRegister}
+              />
 
               <div className="p-3.5 rounded-xl bg-neutral-950/80 border border-neutral-800/80 text-[11px] text-neutral-400 flex items-start gap-2">
                 <FileCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />

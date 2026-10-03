@@ -3,3 +3,7 @@ node_modules/
 .github_repo
 .env
 .env.*
+.android-sdk/
+android/app/src/main/assets/www/*
+!android/app/src/main/assets/www/.gitkeep
+artifacts/*.apk

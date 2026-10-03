@@ -35,10 +35,22 @@ export const FilesView: React.FC<FilesViewProps> = ({ documents, onAddDocument }
   const onUpload = (file: File | undefined) => {
     if (!file) return;
     const today = new Date().toISOString().slice(0, 10);
+    const name = file.name.toLowerCase();
+    const category: DocumentRecord["category"] = /receipt/.test(name)
+      ? "receipt"
+      : /invoice/.test(name)
+        ? "tax_invoice"
+        : /statement|bank/.test(name)
+          ? "bank_statement"
+          : /asic|acn/.test(name)
+            ? "asic"
+            : /abn|registration/.test(name)
+              ? "registration"
+              : "contract";
     onAddDocument({
       id: `doc-${Date.now()}`,
       title: file.name.replace(/\.[^.]+$/, ""),
-      category: "contract",
+      category,
       filename: file.name,
       fileSize: file.size > 1_000_000 ? `${(file.size / 1_000_000).toFixed(1)} MB` : `${Math.max(1, Math.round(file.size / 1000))} KB`,
       uploadDate: today,

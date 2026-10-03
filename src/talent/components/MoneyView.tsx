@@ -153,7 +153,7 @@ export const MoneyView: React.FC<MoneyViewProps> = ({
         <div>
           <h1 className="text-2xl font-bold text-white font-display">Money, Ledger & Banking</h1>
           <p className="text-xs text-neutral-400 mt-0.5">
-            Real Australian bank reconciliation, verified expense tracking, and balanced double-entry journals.
+            Match what hits the account to invoices, payouts, and receipts. The sample feed is fictional and stays in this browser.
           </p>
         </div>
 

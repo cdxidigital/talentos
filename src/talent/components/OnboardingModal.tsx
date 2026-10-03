@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { BusinessIdentity, CreatorProfile, TaxProfile, OperatingProfile, EntityType } from '../types';
 import { validateAustralianABN } from '../utils/taxAndRegulatoryEngine';
 import { CheckCircle2, ShieldCheck, AlertCircle, Building2, User, ArrowRight, ArrowLeft, RefreshCw, Sparkles } from 'lucide-react';
+import { AbnCheck } from './AbnCheck';
+import { INDUSTRIES, industryById } from '../lib/industries';
+import { applyIndustryTheme, industryAccent } from '../lib/industryTheme';
 
 interface OnboardingModalProps {
   isOpen: boolean;
@@ -99,16 +102,16 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                 </p>
                 <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                   <div className="p-3 rounded-lg bg-neutral-900 border border-neutral-800">
-                    <span className="text-emerald-400 font-semibold block mb-1">ABR Gated</span>
-                    Official ABN verification & 28-day detail change monitor.
+                    <span className="text-emerald-400 font-semibold block mb-1">ABN Lookup</span>
+                    Check a number on the public register. It does not lodge a return.
                   </div>
                   <div className="p-3 rounded-lg bg-neutral-900 border border-neutral-800">
                     <span className="text-emerald-400 font-semibold block mb-1">Double-Entry</span>
                     Balanced ledger, platform payout unbundling & GST.
                   </div>
                   <div className="p-3 rounded-lg bg-neutral-900 border border-neutral-800">
-                    <span className="text-emerald-400 font-semibold block mb-1">ATO / ASIC checks</span>
-                    Continuous monitoring of $75k GST threshold & company reviews.
+                    <span className="text-emerald-400 font-semibold block mb-1">Tax from your books</span>
+                    GST threshold and BAS dates from what you record. Lodging stays with you or your agent.
                   </div>
                 </div>
               </div>
@@ -149,8 +152,25 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                   <p className="text-xs text-rose-400 mt-1">{abnValidation.error}</p>
                 )}
                 <p className="text-xs text-neutral-400 mt-1">
-                  Try test ABN: <code className="text-neutral-300 font-mono">51 824 753 556</code>
+                  51 824 753 556 is a real ABN, the Tax Office, so you can see a live result. Use your own number for your books.
                 </p>
+                <div className="mt-3">
+                  <AbnCheck
+                    abn={abnInput}
+                    booksName={formData.legalName}
+                    onUse={(hit) => {
+                      setFormData((prev) => ({
+                        ...prev,
+                        legalName: hit.legalName || prev.legalName,
+                        entityType: hit.entityType ?? prev.entityType,
+                        businessAddress: hit.location || prev.businessAddress,
+                        abnLastVerifiedAt: hit.checkedAt,
+                        abrLastCheckedAt: hit.checkedAt,
+                      }));
+                      setTaxData((prev) => ({ ...prev, gstRegistered: hit.gstRegistered }));
+                    }}
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -251,7 +271,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                         onChange={(e) => setTaxData({ ...taxData, accountingBasis: e.target.value as 'cash' | 'accruals' })}
                         className="w-full px-3 py-2 bg-neutral-950 border border-neutral-700 rounded-lg text-white focus:border-emerald-500 focus:outline-none"
                       >
-                        <option value="cash">Cash Basis (Recommended for creators)</option>
+                        <option value="cash">Cash basis (usual for sole traders)</option>
                         <option value="accruals">Accruals / Non-Cash</option>
                       </select>
                     </div>
@@ -328,20 +348,50 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
 
           {step === 4 && (
             <div className="space-y-4">
-              <p className="text-xs text-neutral-400">
-                Configure your active revenue streams and operational touchpoints to customize your compliance radar:
-              </p>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-neutral-300">Industry module</p>
+                <p className="mt-1 text-xs text-neutral-400">
+                  This sets the job types, and the app colour. Any Australian sole trader can use the books. Pick the closest trade.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {INDUSTRIES.map((item) => {
+                  const selected = industryById(opData.industryModule).id === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        applyIndustryTheme(item.id);
+                        setOpData((prev) => ({
+                          ...prev,
+                          industryModule: item.id,
+                          hasBookings: true,
+                          hasPlatformPayouts: item.id === "creator" ? prev.hasPlatformPayouts : false,
+                          hasDigitalProducts: item.id === "creator" || item.id === "maker" || item.id === "health" ? prev.hasDigitalProducts : false,
+                          hasPhysicalProducts: item.id === "creator" || item.id === "trades" || item.id === "maker" || item.id === "hospitality" ? prev.hasPhysicalProducts : false,
+                          hasSubscriptions: item.id === "professional" ? prev.hasSubscriptions : false,
+                          hasAffiliateIncome: false,
+                        }));
+                      }}
+                      className={`flex items-start gap-2 rounded-xl border p-3 text-left ${
+                        selected ? "border-accent bg-accent-soft" : "border-neutral-800 bg-neutral-900 hover:border-neutral-700"
+                      }`}
+                    >
+                      <span className="mt-1 h-3 w-3 shrink-0 rounded-full" style={{ background: industryAccent(item.id) }} />
+                      <span>
+                        <span className="block text-sm font-semibold text-white">{item.label}</span>
+                        <span className="mt-0.5 block text-xs text-neutral-400">{item.blurb}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
 
+              <p className="text-xs text-neutral-400">What you actually sell. Turn on only what applies.</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {[
-                  { key: 'hasBookings', label: 'Brand Deals & Sponsored Campaigns', desc: 'Invoicing brands and agencies for posts, UGC, appearances' },
-                  { key: 'hasPlatformPayouts', label: 'Platform Payouts', desc: 'YouTube, OnlyFans, Patreon, TikTok Creator Rewards' },
-                  { key: 'hasDigitalProducts', label: 'Digital Products & Presets', desc: 'Lightroom presets, eBooks, digital guides' },
-                  { key: 'hasPhysicalProducts', label: 'Physical Merch & Products', desc: 'Apparel, prints, physical accessories' },
-                  { key: 'hasContractors', label: 'Engages Contractors', desc: 'Videographers, editors, assistants, makeup artists' },
-                  { key: 'hasEmployees', label: 'Employs Staff', desc: 'Full-time or casual employees on wages' }
-                ].map(({ key, label, desc }) => {
-                  const val = opData[key as keyof OperatingProfile] as boolean;
+                {industryById(opData.industryModule).streams.map(({ key, label, desc }) => {
+                  const val = Boolean(opData[key]);
                   return (
                     <div
                       key={key}
@@ -370,7 +420,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
           {step === 5 && (
             <div className="space-y-4">
               <p className="text-xs text-neutral-400">
-                TalentOS separates operating funds from tax escrow to protect creators from surprise tax liabilities:
+                There is no live bank feed. Money you record — invoices paid, expenses, and payouts — lands in an operating account kept in this browser.
               </p>
 
               <div className="space-y-3">
@@ -380,11 +430,11 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                       UP
                     </div>
                     <div>
-                      <div className="font-semibold text-white">Up Bank / Everyday Business</div>
-                      <div className="text-xs text-neutral-400 font-mono">BSB 633-123 · Acc •••• 4920</div>
+                      <div className="font-semibold text-white">Operating account</div>
+                      <div className="text-xs text-neutral-400">Created in your books. It is not linked to a bank.</div>
                     </div>
                   </div>
-                  <span className="text-xs text-emerald-400 font-medium">Connected</span>
+                  <span className="text-xs text-neutral-400 font-medium">Not connected</span>
                 </div>
 
                 <div className="p-4 rounded-xl bg-neutral-800/40 border border-neutral-700/60 flex items-center justify-between">
@@ -393,11 +443,11 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                       CBA
                     </div>
                     <div>
-                      <div className="font-semibold text-white">CommBank / Tax & GST Reserve</div>
-                      <div className="text-xs text-neutral-400 font-mono">BSB 062-111 · Acc •••• 8812</div>
+                      <div className="font-semibold text-white">Tax reserve</div>
+                      <div className="text-xs text-neutral-400">Set aside in the books. Not a bank account we can move.</div>
                     </div>
                   </div>
-                  <span className="text-xs text-emerald-400 font-medium">Connected</span>
+                  <span className="text-xs text-neutral-400 font-medium">In your books</span>
                 </div>
 
                 <div className="p-4 rounded-xl bg-neutral-800/40 border border-neutral-700/60 flex items-center justify-between">
@@ -406,11 +456,11 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                       S
                     </div>
                     <div>
-                      <div className="font-semibold text-white">Stripe / Platform Connect</div>
-                      <div className="text-xs text-neutral-400">Card processing & digital sales</div>
+                      <div className="font-semibold text-white">Card and platform sales</div>
+                      <div className="text-xs text-neutral-400">Record a payout or a shop sale when the money arrives.</div>
                     </div>
                   </div>
-                  <span className="text-xs text-emerald-400 font-medium">Active</span>
+                  <span className="text-xs text-neutral-400 font-medium">Manual</span>
                 </div>
               </div>
             </div>
@@ -424,7 +474,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                   Business Compliance Map Generated
                 </div>
                 <p className="text-xs text-neutral-300 leading-relaxed">
-                  Based on your ABN profile ({formData.abn}) and entity structure ({formData.entityType === 'company' ? 'Proprietary Company' : 'Sole Trader'}), TalentOS has activated your Australian compliance radar.
+                  Based on your ABN ({formData.abn || "not entered yet"}) as a sole trader in {industryById(opData.industryModule).label}, TalentOS has set up your books. Lodging stays with you or your agent.
                 </p>
               </div>
 

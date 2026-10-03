@@ -55,6 +55,8 @@ export interface OperatingProfile {
   hasEmployees: boolean;
   hasInterstateActivity: boolean;
   hasOverseasActivity: boolean;
+  /** Trade chosen at onboarding. Drives the new-job options. */
+  industryModule?: 'creator' | 'trades' | 'professional' | 'health' | 'hospitality' | 'maker' | 'general';
 }
 
 export type ObligationAuthority = 'ABR' | 'ASIC' | 'ATO' | 'WORKFORCE' | 'DOCUMENTS';
@@ -90,7 +92,34 @@ export interface Client {
 }
 
 export type BookingStatus = 'lead' | 'quote' | 'negotiation' | 'confirmed' | 'delivery' | 'invoiced' | 'paid' | 'completed';
-export type BookingType = 'sponsored_content' | 'paid_post' | 'ugc' | 'modelling' | 'event_appearance' | 'livestream' | 'licensing' | 'campaign';
+export type BookingType =
+  | 'sponsored_content'
+  | 'paid_post'
+  | 'ugc'
+  | 'modelling'
+  | 'event_appearance'
+  | 'livestream'
+  | 'licensing'
+  | 'campaign'
+  | 'quoted_job'
+  | 'callout'
+  | 'install'
+  | 'maintenance'
+  | 'repair'
+  | 'consult'
+  | 'session'
+  | 'retainer'
+  | 'workshop'
+  | 'appointment'
+  | 'treatment'
+  | 'package'
+  | 'function'
+  | 'catering'
+  | 'service'
+  | 'job'
+  | 'site_visit'
+  | 'custom_order'
+  | 'commission';
 
 export interface Booking {
   id: string;

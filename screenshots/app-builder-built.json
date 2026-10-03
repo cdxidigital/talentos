@@ -5,11 +5,11 @@
       "width": 1280,
       "height": 800,
       "status": 200,
-      "title": "TalentOS",
+      "title": "talentOS",
       "hasCanvas": false,
-      "bodyTextLen": 605,
-      "bodyTextHash": "d43314c7b08eaed10c150e8e86b82410b44432109eefdb6d21581e44d6aa49bf",
-      "bodyTextPrefix": "TalentOS business, sorted FOR INDEPENDENT TALENT Spend less time",
+      "bodyTextLen": 627,
+      "bodyTextHash": "553d405d184a8aa20d138eb2ac9e99a5e1afce94d3a3486818aeb7979a650b07",
+      "bodyTextPrefix": "talentOS by cdxi business, sorted FOR AUSTRALIAN SOLE TRADERS Sp",
       "horizontalOverflow": false,
       "consoleErrors": [],
       "pageErrors": [],
@@ -19,11 +19,11 @@
       "width": 390,
       "height": 844,
       "status": 200,
-      "title": "TalentOS",
+      "title": "talentOS",
       "hasCanvas": false,
-      "bodyTextLen": 605,
-      "bodyTextHash": "d43314c7b08eaed10c150e8e86b82410b44432109eefdb6d21581e44d6aa49bf",
-      "bodyTextPrefix": "TalentOS business, sorted FOR INDEPENDENT TALENT Spend less time",
+      "bodyTextLen": 627,
+      "bodyTextHash": "553d405d184a8aa20d138eb2ac9e99a5e1afce94d3a3486818aeb7979a650b07",
+      "bodyTextPrefix": "talentOS by cdxi business, sorted FOR AUSTRALIAN SOLE TRADERS Sp",
       "horizontalOverflow": false,
       "consoleErrors": [],
       "pageErrors": [],
@@ -33,9 +33,6 @@
   "brandWarnings": [],
   "authWarnings": [],
   "verdictFile": "/workspace/screenshots/app-builder-built.json",
-  "divergesFromBaseline": true,
-  "baselineReasons": [
-    "desktop: body text changed (28 -> 605 chars, hash mismatch)",
-    "mobile: body text changed (28 -> 605 chars, hash mismatch)"
-  ]
+  "divergesFromBaseline": false,
+  "baselineReasons": []
 }

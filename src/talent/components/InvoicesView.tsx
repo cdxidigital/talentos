@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Invoice, Client, BusinessIdentity, TaxProfile, InvoiceItem } from '../types';
+import React, { useEffect, useState } from 'react';
+import { Invoice, Client, BusinessIdentity, TaxProfile, InvoiceItem, BankAccount } from '../types';
 import { formatAUD } from '../utils/taxAndRegulatoryEngine';
 import { nextInvoiceNumber, shownInvoiceStatus } from '../lib/format';
 import {
@@ -22,6 +22,8 @@ interface InvoicesViewProps {
   taxProfile: TaxProfile;
   onAddInvoice: (invoice: Invoice) => void;
   onMarkInvoicePaid: (invoiceId: string) => void;
+  bankAccounts?: BankAccount[];
+  launchToken?: number;
 }
 
 export const InvoicesView: React.FC<InvoicesViewProps> = ({
@@ -30,10 +32,15 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
   business,
   taxProfile,
   onAddInvoice,
-  onMarkInvoicePaid
+  onMarkInvoicePaid,
+  bankAccounts = [],
+  launchToken = 0
 }) => {
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  useEffect(() => {
+    if (launchToken > 0) setShowCreateModal(true);
+  }, [launchToken]);
 
   // New Invoice Form State
   const [newClientId, setNewClientId] = useState(clients[0]?.id || '');
@@ -383,10 +390,18 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
 
               {/* Remittance Details */}
               <div className="pt-4 border-t border-neutral-800 text-neutral-400 space-y-1">
-                <div className="font-semibold text-white">Payment Remittance Details:</div>
-                <div>Bank: <span className="text-white">Up Bank (Business Account)</span></div>
-                <div>Account Name: <span className="text-white">{business.legalName}</span></div>
-                <div>BSB: <span className="font-mono text-white">633-123</span> · Account Number: <span className="font-mono text-white">49201948</span></div>
+                <div className="font-semibold text-white">Payment details</div>
+                {(() => {
+                  const payTo = bankAccounts.find((a) => a.type === "transaction") ?? bankAccounts[0];
+                  if (!payTo) return <div>Add an operating account in Money, then put it on the invoice.</div>;
+                  return (
+                    <>
+                      <div>Bank: <span className="text-white">{payTo.bankName}</span></div>
+                      <div>Account name: <span className="text-white">{payTo.accountName || business.legalName}</span></div>
+                      <div>BSB: <span className="font-mono text-white">{payTo.bsb || "—"}</span> · Account: <span className="font-mono text-white">{payTo.accountNumber || "—"}</span></div>
+                    </>
+                  );
+                })()}
                 <div>Reference: <span className="font-mono text-emerald-400">{selectedInvoice.invoiceNumber}</span></div>
               </div>
 

@@ -14,7 +14,8 @@ import {
   ObligationItem
 } from '../types';
 import { formatAUD } from '../utils/taxAndRegulatoryEngine';
-import { shownInvoiceStatus } from '../lib/format';
+import { calendarDaysUntil, shownInvoiceStatus } from '../lib/format';
+import { bookingTypeLabel, industryById } from '../lib/industries';
 import type { TaskTone } from '../lib/store';
 import {
   Calendar,
@@ -55,6 +56,7 @@ interface HomeDashboardProps {
   onNavigate: (tab: string) => void;
   onOpenQuickAdd: (type: 'booking' | 'sale' | 'expense' | 'invoice') => void;
   onOpenAssistant: () => void;
+  industryModule?: string;
 }
 
 interface NextStep {
@@ -103,7 +105,8 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   obligations,
   onNavigate,
   onOpenQuickAdd,
-  onOpenAssistant
+  onOpenAssistant,
+  industryModule
 }) => {
   /* ---------------------------- calculations ---------------------------- */
   const totalCashBalance = bankAccounts.reduce((acc, b) => acc + b.balance, 0);
@@ -197,7 +200,9 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
       tone: ob.status === 'ACTION_REQUIRED' ? 'alert' : 'warn',
       rank: (ob.status === 'ACTION_REQUIRED' ? TONE_RANK.alert : TONE_RANK.warn) + 0.5 + idx * 0.01,
       title: ob.title,
-      detail: ob.summary,
+      detail: ob.dueDate
+        ? ob.summary.replace(/Due in \d+ days/, `Due in ${calendarDaysUntil(ob.dueDate)} days`)
+        : ob.summary,
       ctaLabel: 'Review',
       tab: 'compliance'
     })
@@ -247,12 +252,13 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
     }
   ];
 
+  const trade = industryById(industryModule);
   const hour = new Date().getHours();
   const hello = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const firstName = creator.creatorHandle.replace('@', '') || 'there';
   const ownerMilestones = [
     { label: 'Basic details', done: Boolean(business.tradingName && business.abn) },
-    { label: 'First booking', done: bookings.length > 0 },
+    { label: `First ${trade.jobNoun.toLowerCase()}`, done: bookings.length > 0 },
     { label: 'Tax details', done: Boolean(business.abn && taxProfile.financialYear) }
   ];
   const completedMilestones = ownerMilestones.filter((milestone) => milestone.done).length;
@@ -264,8 +270,12 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
       <GlassCard elevated className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-mono text-muted">
-            <span>{creator.creatorHandle}</span>
-            <span aria-hidden="true">·</span>
+            {creator.creatorHandle ? (
+              <>
+                <span>{creator.creatorHandle}</span>
+                <span aria-hidden="true">·</span>
+              </>
+            ) : null}
             <span className="font-semibold text-accent">{business.tradingName}</span>
             <span aria-hidden="true">·</span>
             <span>ABN {business.abn}</span>
@@ -283,7 +293,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
             onClick={() => onOpenQuickAdd('booking')}
             className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-neutral-700/60 bg-neutral-900 px-3.5 py-2 text-xs font-semibold text-ink transition-colors hover:bg-neutral-800 sm:w-auto"
           >
-            <Plus className="h-3.5 w-3.5" /> New booking
+            <Plus className="h-3.5 w-3.5" /> New {trade.jobNoun.toLowerCase()}
           </button>
           <button
             onClick={() => onOpenQuickAdd('invoice')}
@@ -449,7 +459,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                     <span className="flex items-center gap-1.5 text-[11px] text-muted">
                       <span className="font-medium text-ink">{client?.tradingName || 'Brand'}</span>
                       <span aria-hidden="true">·</span>
-                      <span className="capitalize">{b.bookingType.replace('_', ' ')}</span>
+                      <span className="capitalize">{bookingTypeLabel(b.bookingType, industryModule)}</span>
                     </span>
                     <span className="mt-0.5 block truncate text-sm font-semibold text-ink">{b.campaignName}</span>
                     <span className="text-[11px] text-faint">{b.startDate} → {b.endDate}</span>
@@ -508,7 +518,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                       <span className="truncate text-sm font-medium text-ink">{ob.title}</span>
                       <span className="shrink-0 font-mono text-[10px] text-faint">{ob.authority}</span>
                     </span>
-                    <span className="mt-0.5 line-clamp-2 block text-[11px] text-muted">{ob.summary}</span>
+                    <span className="mt-0.5 line-clamp-2 block text-[11px] text-muted">{ob.dueDate ? ob.summary.replace(/Due in \d+ days/, `Due in ${calendarDaysUntil(ob.dueDate)} days`) : ob.summary}</span>
                   </span>
                 </button>
               );

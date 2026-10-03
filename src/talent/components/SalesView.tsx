@@ -20,6 +20,7 @@ interface SalesViewProps {
   taxProfile: TaxProfile;
   onAddProduct: (product: Product) => void;
   onAddPayout: (payout: PlatformPayout) => void;
+  onAddOrder: (order: Order, productId?: string) => void;
 }
 
 export const SalesView: React.FC<SalesViewProps> = ({
@@ -28,11 +29,16 @@ export const SalesView: React.FC<SalesViewProps> = ({
   payouts,
   taxProfile,
   onAddProduct,
-  onAddPayout
+  onAddPayout,
+  onAddOrder
 }) => {
   const [activeTab, setActiveTab] = useState<'payouts' | 'orders' | 'products'>('payouts');
   const [showAddProductModal, setShowAddProductModal] = useState(false);
   const [showAddPayoutModal, setShowAddPayoutModal] = useState(false);
+  const [showSaleModal, setShowSaleModal] = useState(false);
+  const [saleProductId, setSaleProductId] = useState(products[0]?.id ?? "");
+  const [saleCustomer, setSaleCustomer] = useState("");
+  const [saleEmail, setSaleEmail] = useState("");
 
   // New Payout Form
   const [payoutPlatform, setPayoutPlatform] = useState<PlatformPayout['platform']>('OnlyFans');
@@ -98,6 +104,34 @@ export const SalesView: React.FC<SalesViewProps> = ({
     setNewProdSku('');
   };
 
+  const handleSaveSale = (e: React.FormEvent) => {
+    e.preventDefault();
+    const product = products.find((p) => p.id === saleProductId);
+    if (!product || !saleCustomer.trim()) return;
+    const registered = taxProfile.gstRegistered;
+    const total = product.gstInclusive || !registered ? product.price : Math.round(product.price * 1.1 * 100) / 100;
+    const gst = registered ? Math.round((total / 11) * 100) / 100 : 0;
+    const subtotal = Math.round((total - gst) * 100) / 100;
+    const order: Order = {
+      id: `ord-${Date.now()}`,
+      orderNumber: `ORD-${String(orders.length + 1).padStart(4, "0")}`,
+      customerName: saleCustomer.trim(),
+      customerEmail: saleEmail.trim() || "customer@email.com",
+      channel: "storefront",
+      date: new Date().toISOString().slice(0, 10),
+      subtotal,
+      gstAmount: gst,
+      shipping: 0,
+      total,
+      status: "completed",
+      itemsSummary: product.name,
+    };
+    onAddOrder(order, product.id);
+    setShowSaleModal(false);
+    setSaleCustomer("");
+    setSaleEmail("");
+  };
+
   const totalGrossPayouts = payouts.reduce((acc, p) => acc + p.grossRevenue, 0);
   const totalNetPayouts = payouts.reduce((acc, p) => acc + p.netPayout, 0);
   const totalPlatformFeesDeducted = payouts.reduce((acc, p) => acc + p.platformFee + p.paymentProcessingFee + p.managementCommission, 0);
@@ -151,9 +185,9 @@ export const SalesView: React.FC<SalesViewProps> = ({
           {/* Summary Strip */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="p-4 rounded-xl bg-neutral-900 border border-neutral-800">
-              <div className="text-xs text-neutral-400">Total Gross Fan Revenue</div>
+              <div className="text-xs text-neutral-400">Gross before fees</div>
               <div className="text-2xl font-bold text-white tabular-nums mt-1">{formatAUD(totalGrossPayouts)}</div>
-              <div className="text-[11px] text-neutral-400 mt-1">Direct from subscribers & viewers</div>
+              <div className="text-[11px] text-neutral-400 mt-1">Before platform or card fees</div>
             </div>
             <div className="p-4 rounded-xl bg-neutral-900 border border-neutral-800">
               <div className="text-xs text-neutral-400">Total Deductions (Fees & Agency)</div>
@@ -163,7 +197,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
             <div className="p-4 rounded-xl bg-neutral-900 border border-neutral-800">
               <div className="text-xs text-neutral-400">Net Australian Bank Deposits</div>
               <div className="text-2xl font-bold text-emerald-400 tabular-nums mt-1">{formatAUD(totalNetPayouts)}</div>
-              <div className="text-[11px] text-neutral-400 mt-1">Reconciled into Up Bank / CBA</div>
+              <div className="text-[11px] text-neutral-400 mt-1">Recorded in the operating account</div>
             </div>
           </div>
 
@@ -233,6 +267,26 @@ export const SalesView: React.FC<SalesViewProps> = ({
       {/* TAB 2: STOREFRONT ORDERS */}
       {activeTab === 'orders' && (
         <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-neutral-400">Shop sales land in the operating account and the ledger.</p>
+            <button
+              type="button"
+              onClick={() => {
+                setSaleProductId(products[0]?.id ?? "");
+                setShowSaleModal(true);
+              }}
+              disabled={products.length === 0}
+              className="px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-[#fff] shadow-lg shadow-emerald-600/20 flex items-center gap-1.5 transition-all disabled:opacity-40"
+            >
+              <Plus className="w-3.5 h-3.5" /> Record a sale
+            </button>
+          </div>
+          {orders.length === 0 && (
+            <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-8 text-center">
+              <p className="font-display text-lg font-bold text-white">No shop sales yet</p>
+              <p className="mt-1 text-sm text-neutral-400">Add a product, then record the sale here.</p>
+            </div>
+          )}
           <div className="p-5 rounded-2xl bg-neutral-900 border border-neutral-800">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
@@ -316,6 +370,42 @@ export const SalesView: React.FC<SalesViewProps> = ({
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* RECORD SALE */}
+      {showSaleModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl p-6 text-sm text-neutral-200 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
+              <h3 className="font-semibold text-white text-base">Record a shop sale</h3>
+              <button type="button" onClick={() => setShowSaleModal(false)} className="text-neutral-400 hover:text-white">✕</button>
+            </div>
+            <form onSubmit={handleSaveSale} className="space-y-3">
+              <label className="block text-xs font-semibold text-neutral-300">
+                Product
+                <select
+                  value={saleProductId}
+                  onChange={(e) => setSaleProductId(e.target.value)}
+                  className="mt-1 w-full px-3 py-2 bg-neutral-950 border border-neutral-700 rounded-lg text-white"
+                >
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name} · {formatAUD(p.price)}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs font-semibold text-neutral-300">
+                Customer
+                <input required value={saleCustomer} onChange={(e) => setSaleCustomer(e.target.value)} className="mt-1 w-full px-3 py-2 bg-neutral-950 border border-neutral-700 rounded-lg text-white" placeholder="Name" />
+              </label>
+              <label className="block text-xs font-semibold text-neutral-300">
+                Email
+                <input type="email" value={saleEmail} onChange={(e) => setSaleEmail(e.target.value)} className="mt-1 w-full px-3 py-2 bg-neutral-950 border border-neutral-700 rounded-lg text-white" placeholder="Optional" />
+              </label>
+              <p className="text-[11px] text-neutral-400">The sale is marked paid, added to the operating account, and posted to the ledger.</p>
+              <button type="submit" className="w-full rounded-xl bg-emerald-600 py-2.5 text-xs font-semibold text-[#fff]">Save sale</button>
+            </form>
           </div>
         </div>
       )}

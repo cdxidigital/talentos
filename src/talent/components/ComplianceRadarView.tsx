@@ -15,6 +15,9 @@ import {
   evaluateWorkerClassification,
   VERSIONED_RULES
 } from '../utils/taxAndRegulatoryEngine';
+import { calendarDaysUntil } from '../lib/format';
+import { AbnCheck } from './AbnCheck';
+import type { AbrLookup } from '../abr.functions';
 import {
   ShieldCheck,
   AlertCircle,
@@ -42,6 +45,8 @@ interface ComplianceRadarViewProps {
   annualTaxableIncome: number;
   onLockBASPeriod: (periodId: string) => void;
   onUpdateObligation: (obligation: ObligationItem) => void;
+  activityAfterPeriod?: number;
+  onApplyRegister?: (hit: AbrLookup) => void;
 }
 
 export const ComplianceRadarView: React.FC<ComplianceRadarViewProps> = ({
@@ -53,7 +58,9 @@ export const ComplianceRadarView: React.FC<ComplianceRadarViewProps> = ({
   annualRevenue,
   annualTaxableIncome,
   onLockBASPeriod,
-  onUpdateObligation
+  onUpdateObligation,
+  activityAfterPeriod = 0,
+  onApplyRegister
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'radar' | 'gst_monitor' | 'bas_workspace' | 'tax_reserve' | 'worker_test' | 'asic_gov'>('radar');
   const [selectedObligation, setSelectedObligation] = useState<ObligationItem | null>(null);
@@ -99,7 +106,16 @@ export const ComplianceRadarView: React.FC<ComplianceRadarViewProps> = ({
           <p className="text-xs text-neutral-400 mt-0.5">
             Progressive obligation map across ABR, ASIC, ATO and Fair Work. All rules versioned to 2026/2027 standards.
           </p>
+          {activityAfterPeriod > 0 && (
+            <p className="mt-2 max-w-xl text-xs text-amber-300">
+              {activityAfterPeriod} transaction{activityAfterPeriod === 1 ? "" : "s"} dated after {basPeriod.endDate} {basPeriod.status === "LOCKED" || basPeriod.status === "LODGED" ? "will sit in the next BAS" : "are not in this BAS yet"}. This quarter stays as prepared.
+            </p>
+          )}
         </div>
+        <div className="w-full sm:max-w-md">
+          <AbnCheck abn={business.abn} booksName={business.legalName} onUse={onApplyRegister} />
+        </div>
+      </div>
 
         {/* Sub-nav tabs */}
         <div className="flex flex-wrap items-center gap-1 p-1 bg-neutral-900 border border-neutral-800 rounded-xl text-xs">
@@ -152,7 +168,6 @@ export const ComplianceRadarView: React.FC<ComplianceRadarViewProps> = ({
             ASIC & Director
           </button>
         </div>
-      </div>
 
       {/* SUBTAB 1: COMPLIANCE RADAR CARDS */}
       {activeSubTab === 'radar' && (
@@ -184,12 +199,12 @@ export const ComplianceRadarView: React.FC<ComplianceRadarViewProps> = ({
                     </div>
 
                     <h3 className="font-bold text-white text-base font-display">{ob.title}</h3>
-                    <p className="text-xs text-neutral-300 mt-1 line-clamp-2">{ob.summary}</p>
+                    <p className="text-xs text-neutral-300 mt-1 line-clamp-2">{ob.summary.replace(/Due in \d+ days/, `Due in ${ob.dueDate ? calendarDaysUntil(ob.dueDate) : ""} days`)}</p>
 
                     {ob.dueDate && (
                       <div className="flex items-center gap-1.5 text-xs text-neutral-400 mt-3 pt-3 border-t border-neutral-800/80">
                         <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Due: {ob.dueDate} ({ob.daysRemaining} days remaining)</span>
+                        <span>Due: {ob.dueDate} ({Math.max(0, calendarDaysUntil(ob.dueDate))} days remaining)</span>
                       </div>
                     )}
                   </div>

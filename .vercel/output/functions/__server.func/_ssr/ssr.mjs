@@ -28,7 +28,7 @@ var globalObj$1 = globalThis;
 if (!globalObj$1[GLOBAL_EVENT_STORAGE_KEY]) globalObj$1[GLOBAL_EVENT_STORAGE_KEY] = new AsyncLocalStorage();
 var eventStorage = globalObj$1[GLOBAL_EVENT_STORAGE_KEY];
 function isPromiseLike(value) {
-	return typeof value.then === "function";
+	return (typeof value === "object" || typeof value === "function") && value !== null && typeof value.then === "function";
 }
 function getSetCookieValues(headers) {
 	const headersWithSetCookie = headers;
@@ -45,13 +45,23 @@ function mergeEventResponseHeaders(response, event) {
 	for (const cookie of responseSetCookies) response.headers.append("set-cookie", cookie);
 	for (const cookie of eventSetCookies) response.headers.append("set-cookie", cookie);
 }
-function attachResponseHeaders(value, event) {
-	if (isPromiseLike(value)) return value.then((resolved) => {
-		if (resolved instanceof Response) mergeEventResponseHeaders(resolved, event);
-		return resolved;
-	});
-	if (value instanceof Response) mergeEventResponseHeaders(value, event);
-	return value;
+function finalizeResponse(value, event) {
+	const response = ensureResponse(value);
+	mergeEventResponseHeaders(response, event);
+	return response;
+}
+function finalizeMaybeResponse(value, event) {
+	if (isPromiseLike(value)) return Promise.resolve(value).then((resolved) => finalizeResponse(resolved, event), (error) => finalizeResponse(handleResponseError(error), event));
+	return finalizeResponse(value, event);
+}
+function ensureResponse(value) {
+	if (value instanceof Response) return value;
+	return new Response("Internal Server Error", { status: 500 });
+}
+function handleResponseError(error) {
+	if (error instanceof Response) return error;
+	if (error instanceof Error) throw error;
+	return new Response("Internal Server Error", { status: 500 });
 }
 function requestHandler(handler) {
 	return (request, requestOpts) => {
@@ -65,7 +75,13 @@ function requestHandler(handler) {
 			});
 			throw error;
 		}
-		return toResponse(attachResponseHeaders(eventStorage.run({ h3Event }, () => handler(request, requestOpts)), h3Event), h3Event);
+		let response;
+		try {
+			response = eventStorage.run({ h3Event }, () => handler(request, requestOpts));
+		} catch (error) {
+			response = handleResponseError(error);
+		}
+		return toResponse(finalizeMaybeResponse(response, h3Event), h3Event);
 	};
 }
 function getH3Event() {
@@ -87,7 +103,7 @@ var HEADERS = { TSS_SHELL: "X-TSS_SHELL" };
 * the dev styles URL for route-scoped CSS collection.
 */
 async function getStartManifest(matchedRoutes) {
-	const { tsrStartManifest } = await import("../_tanstack-start-manifest_v-Blz-mRFO.mjs");
+	const { tsrStartManifest } = await import("../_tanstack-start-manifest_v-Ct3RH2XT.mjs");
 	const startManifest = tsrStartManifest();
 	let routes = startManifest.routes;
 	routes[rootRouteId];
@@ -107,13 +123,17 @@ async function getStartManifest(matchedRoutes) {
 	};
 }
 var manifest = {
+	"034379341be875c18e9c2b99abd6431701f16ded51965b8d7ede2df2eaf88538": {
+		functionName: "lookupAbn_createServerFn_handler",
+		importer: () => import("./abr.functions-IDlS7T18.mjs")
+	},
 	"9fb1ad3662e2d7cdfe0d2f0c061a122b112706fc74d2b87f97d3c3429df01d16": {
 		functionName: "parseReceipt_createServerFn_handler",
-		importer: () => import("./ai.functions-mf-AHOv2.mjs")
+		importer: () => import("./ai.functions-NZ5og6-u.mjs")
 	},
 	"a2f7dbf14c2714d5eccaa6a4bcb9d44720ebd7d386361f5ccf5faaf86d82c693": {
 		functionName: "askLex_createServerFn_handler",
-		importer: () => import("./ai.functions-mf-AHOv2.mjs")
+		importer: () => import("./ai.functions-NZ5og6-u.mjs")
 	}
 };
 async function getServerFnById(id, access) {
@@ -392,10 +412,10 @@ var createServerFn = (options, __opts) => {
 		options: resolvedOptions,
 		middleware: (middleware) => {
 			const newMiddleware = [...resolvedOptions.middleware || []];
-			middleware.map((m) => {
-				if (TSS_SERVER_FUNCTION_FACTORY in m) {
-					if (m.options.middleware) newMiddleware.push(...m.options.middleware);
-				} else newMiddleware.push(m);
+			middleware.forEach((item) => {
+				if (TSS_SERVER_FUNCTION_FACTORY in item) {
+					if (item.options.middleware) newMiddleware.push(...item.options.middleware);
+				} else newMiddleware.push(item);
 			});
 			const res = createServerFn(void 0, {
 				...resolvedOptions,
@@ -437,7 +457,8 @@ var createServerFn = (options, __opts) => {
 					const serverContextAfterGlobalMiddlewares = startContext.contextAfterGlobalMiddlewares;
 					return await executeMiddleware$1(resolvedMiddleware, "server", {
 						...extractedFn,
-						...opts,
+						data: opts.data,
+						method: opts.method ?? resolvedOptions.method,
 						serverFnMeta: extractedFn.serverFnMeta,
 						context: safeObjectMerge(opts.context, serverContextAfterGlobalMiddlewares),
 						request: startContext.request
@@ -702,19 +723,23 @@ var handleServerAction = async ({ request, context, serverFnId }) => {
 		} else if (methodUpper === "GET") {
 			const payloadParam = url.searchParams.get("payload");
 			if (payloadParam && payloadParam.length > MAX_PAYLOAD_SIZE) throw new Error("Payload too large");
-			const payload = payloadParam ? fromJSON(JSON.parse(payloadParam), { plugins: serovalPlugins }) : {};
-			payload.context = safeObjectMerge(payload.context, context);
-			payload.method = methodUpper;
-			res = await action(payload);
+			const payload = payloadParam ? fromJSON(JSON.parse(payloadParam), { plugins: serovalPlugins }) : void 0;
+			res = await action({
+				data: payload?.data,
+				context: safeObjectMerge(payload?.context, context),
+				method: methodUpper
+			});
 		} else {
-			const payload = contentType?.includes("application/json") ? fromJSON(await request.json(), { plugins: serovalPlugins }) : {};
-			payload.context = safeObjectMerge(payload.context, context);
-			payload.method = methodUpper;
-			res = await action(payload);
+			const payload = contentType?.includes("application/json") ? fromJSON(await request.json(), { plugins: serovalPlugins }) : void 0;
+			res = await action({
+				data: payload?.data,
+				context: safeObjectMerge(payload?.context, context),
+				method: methodUpper
+			});
 		}
-		const unwrapped = res.result !== void 0 ? res.result : res.error;
+		const unwrapped = res.error !== void 0 ? res.error : res.result;
 		if (isNotFound(res)) res = isNotFoundResponse(res);
-		if (!isServerFn) return unwrapped;
+		if (!isServerFn && (unwrapped instanceof Response || unwrapped === null || typeof unwrapped !== "object")) return unwrapped;
 		if (unwrapped instanceof Response) {
 			if (isRedirect(unwrapped)) return unwrapped;
 			unwrapped.headers.set(X_TSS_RAW_RESPONSE, "true");
@@ -938,13 +963,12 @@ function serializeResult(res, signal, plugins) {
 }
 function isNotFoundResponse(error) {
 	const { headers, ...rest } = error;
-	return new Response(JSON.stringify(rest), {
+	const response = new Response(JSON.stringify(rest), {
 		status: 404,
-		headers: {
-			"Content-Type": "application/json",
-			...headers || {}
-		}
+		headers
 	});
+	response.headers.set("Content-Type", "application/json");
+	return response;
 }
 var LINK_PARAM_TOKEN_RE = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 var PRELOAD_AS_VALUES = /* @__PURE__ */ new Set([
@@ -1489,7 +1513,14 @@ var ServerFunctionSerializationAdapter = createSerializationAdapter({
 	toSerializable: ({ serverFnMeta }) => ({ functionId: serverFnMeta.id }),
 	fromSerializable: ({ functionId }) => {
 		const fn = async (opts, signal) => {
-			return (await (await getServerFnById(functionId, { origin: "client" }))(opts ?? {}, signal)).result;
+			const serverFn = await getServerFnById(functionId, { origin: "client" });
+			const result = await serverFn({
+				data: opts?.data,
+				context: opts?.context,
+				method: serverFn.method ?? "GET"
+			}, signal);
+			if (result.error !== void 0) throw result.error;
+			return result.result;
 		};
 		return fn;
 	}
@@ -1507,7 +1538,7 @@ var getBaseManifest = getProdBaseManifest;
 var createEarlyHintsForRequest = createEarlyHintsCollector;
 async function loadEntries() {
 	const [routerEntry, startEntry, pluginAdapters] = await Promise.all([
-		import("./router-C-4uuMCl.mjs").then((n) => n.t),
+		import("./router-CZZw6lyl.mjs").then((n) => n.t),
 		import("./start-5Z2QO8AU.mjs"),
 		import("./empty-plugin-adapters-D9UWiqvJ.mjs")
 	]);
@@ -1904,6 +1935,20 @@ async function handleRedirectResponse(response, getRouter, signal, serializeRedi
 	}
 	return ssrResponse;
 }
+function withParsedParams(handler, matchedRoutes) {
+	if (!matchedRoutes.some((route) => route.options.params?.parse ?? route.options.parseParams)) return handler;
+	return (ctx) => {
+		const params = Object.assign(Object.create(null), ctx.params);
+		for (const route of matchedRoutes) {
+			const parse = route.options.params?.parse ?? route.options.parseParams;
+			if (parse) Object.assign(params, parse(params));
+		}
+		return handler({
+			...ctx,
+			params
+		});
+	};
+}
 async function handleServerRoutes({ getRouter, request, url, executeRouter, context, executedRequestMiddlewares }) {
 	const router = await getRouter();
 	const pathname = executeRewriteInput(router.rewrite, url).pathname;
@@ -1926,19 +1971,19 @@ async function handleServerRoutes({ getRouter, request, url, executeRouter, cont
 		const handler = requestMethod === "HEAD" ? handlers["HEAD"] ?? handlers["GET"] ?? handlers["ANY"] : handlers[requestMethod] ?? handlers["ANY"];
 		if (handler) {
 			const mayDefer = !!foundRoute.options.component;
-			if (typeof handler === "function") if (!mayDefer) {
-				terminalHandler = handler;
-				terminalNext = throwIfMayNotDefer;
-			} else routeMiddlewares.push(handler);
-			else {
+			if (typeof handler !== "function") {
 				if (handler.middleware?.length) {
 					const handlerMiddlewares = flattenMiddlewares(handler.middleware);
 					for (const m of handlerMiddlewares) routeMiddlewares.push(m.options.server);
 				}
-				if (handler.handler) if (!mayDefer) {
-					terminalHandler = handler.handler;
+			}
+			const routeHandler = typeof handler === "function" ? handler : handler.handler;
+			if (routeHandler) {
+				const parsedHandler = withParsedParams(routeHandler, matchedRoutes);
+				if (!mayDefer) {
+					terminalHandler = parsedHandler;
 					terminalNext = throwIfMayNotDefer;
-				} else routeMiddlewares.push(handler.handler);
+				} else routeMiddlewares.push(parsedHandler);
 			}
 		}
 	}

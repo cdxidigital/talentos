@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Client, Booking, Quote, Invoice, TaxProfile, BookingStatus, BookingType } from '../types';
+import { industryById } from '../lib/industries';
 import { formatAUD } from '../utils/taxAndRegulatoryEngine';
 import {
   Calendar,
@@ -21,9 +22,12 @@ interface BookingsViewProps {
   taxProfile: TaxProfile;
   onAddBooking: (booking: Booking) => void;
   onAddClient: (client: Client) => void;
+  onAddQuote?: (quote: Quote) => void;
   onConvertToInvoice: (booking: Booking) => void;
   onConvertQuoteToInvoice: (quote: Quote) => void;
   onUpdateBookingStatus?: (bookingId: string, status: BookingStatus) => void;
+  launchToken?: number;
+  industryModule?: string;
 }
 
 export const BookingsView: React.FC<BookingsViewProps> = ({
@@ -33,29 +37,44 @@ export const BookingsView: React.FC<BookingsViewProps> = ({
   taxProfile,
   onAddBooking,
   onAddClient,
+  onAddQuote,
   onConvertToInvoice,
   onConvertQuoteToInvoice,
-  onUpdateBookingStatus
+  onUpdateBookingStatus,
+  launchToken = 0,
+  industryModule
 }) => {
+  const trade = industryById(industryModule);
   const [activeTab, setActiveTab] = useState<'bookings' | 'clients' | 'quotes'>('bookings');
   const [showAddBookingModal, setShowAddBookingModal] = useState(false);
+  useEffect(() => {
+    if (launchToken > 0) {
+      setActiveTab('bookings');
+      setShowAddBookingModal(true);
+    }
+  }, [launchToken]);
   const [showAddClientModal, setShowAddClientModal] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
 
   // New Booking State
   const [newCampaignName, setNewCampaignName] = useState('');
   const [newClientId, setNewClientId] = useState(clients[0]?.id || '');
-  const [newBookingType, setNewBookingType] = useState<BookingType>('campaign');
+  const [newBookingType, setNewBookingType] = useState<BookingType>(trade.types[0].value);
+  useEffect(() => {
+    if (!trade.types.some((item) => item.value === newBookingType)) {
+      setNewBookingType(trade.types[0].value);
+    }
+  }, [trade, newBookingType]);
   const [newStartDate, setNewStartDate] = useState('');
   const [newEndDate, setNewEndDate] = useState('');
-  const [newLocation, setNewLocation] = useState('Sydney Studio / Remote');
+  const [newLocation, setNewLocation] = useState(industryById(industryModule).id === "creator" ? "Sydney Studio / Remote" : "");
   const [newFee, setNewFee] = useState<number>(0);
   const [newDeliverableInput, setNewDeliverableInput] = useState('');
-  const [newDeliverables, setNewDeliverables] = useState<string[]>([
-    '1x Dedicated 60s Reel (IG/TikTok)',
-    '3x In-feed Story Frames with link',
-    '30-day organic digital usage rights'
-  ]);
+  const [newDeliverables, setNewDeliverables] = useState<string[]>(() =>
+    industryById(industryModule).id === "creator"
+      ? ["1x Dedicated 60s Reel (IG/TikTok)", "3x In-feed Story Frames with link", "30-day organic digital usage rights"]
+      : [],
+  );
 
   const handleAddDeliverable = () => {
     if (!newDeliverableInput.trim()) return;
@@ -120,7 +139,7 @@ export const BookingsView: React.FC<BookingsViewProps> = ({
             }`}
           >
             <Calendar className="w-3.5 h-3.5 text-emerald-400" />
-            Bookings Pipeline
+            {trade.jobNoun}s
           </button>
           <button
             onClick={() => setActiveTab('clients')}
@@ -148,7 +167,7 @@ export const BookingsView: React.FC<BookingsViewProps> = ({
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div className="text-xs text-neutral-400">
-              {bookings.length} active deals in your production pipeline
+              {bookings.length} {trade.jobNoun.toLowerCase()}{bookings.length === 1 ? "" : "s"} in the pipeline
             </div>
             <button
               onClick={() => {
@@ -161,7 +180,7 @@ export const BookingsView: React.FC<BookingsViewProps> = ({
               }}
               className="px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-[#fff] shadow-lg shadow-emerald-600/20 flex items-center gap-1.5 transition-all"
             >
-              <Plus className="w-3.5 h-3.5" /> New Booking
+              <Plus className="w-3.5 h-3.5" /> New {trade.jobNoun}
             </button>
           </div>
 
@@ -229,7 +248,7 @@ export const BookingsView: React.FC<BookingsViewProps> = ({
 
                   <div className="mt-4 pt-4 border-t border-neutral-800 flex items-center justify-between">
                     <div>
-                      <div className="text-[10px] text-neutral-400 font-mono">Gross Campaign Fee</div>
+                      <div className="text-[10px] text-neutral-400 font-mono">{trade.feeLabel}</div>
                       <div className="text-xl font-bold text-white tabular-nums">{formatAUD(b.fee)}</div>
                       <div className="text-[10px] text-neutral-500">Agency 15%: -{formatAUD(b.commissionAmount)}</div>
                     </div>
@@ -324,60 +343,17 @@ export const BookingsView: React.FC<BookingsViewProps> = ({
 
       {/* TAB 3: QUOTES */}
       {activeTab === 'quotes' && (
-        <div className="space-y-4">
-          <div className="p-4 rounded-xl bg-neutral-900 border border-neutral-800 text-xs text-neutral-400">
-            <strong>Australian Regulatory Rule:</strong> A quote is an offer and must not silently become an invoice. When accepted, use the 1-click convert button to generate an official Tax Invoice.
-          </div>
-
-          <div className="space-y-3">
-            {quotes.map(q => {
-              const client = clients.find(c => c.id === q.clientId);
-              return (
-                <div key={q.id} className="p-5 rounded-2xl bg-neutral-900 border border-neutral-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2 text-xs text-neutral-400 mb-1">
-                      <span className="font-mono text-white">{q.quoteNumber}</span>
-                      <span aria-hidden="true">·</span>
-                      <span>To: {client?.tradingName}</span>
-                      <span aria-hidden="true">·</span>
-                      <span>Issued: {q.issueDate}</span>
-                      <span aria-hidden="true">·</span>
-                      <span>Valid until: {q.expiryDate}</span>
-                    </div>
-
-                    <div className="text-sm font-semibold text-white">
-                      Usage rights: {q.usageRights}
-                    </div>
-
-                    <div className="text-xs text-neutral-400 mt-1">
-                      Exclusivity terms: {q.exclusivity}
-                    </div>
-                  </div>
-
-                  <div className="text-right sm:shrink-0 flex sm:flex-col items-center sm:items-end justify-between gap-2">
-                    <div>
-                      <div className="text-lg font-bold text-white tabular-nums">{formatAUD(q.total)}</div>
-                      <div className="text-[10px] text-neutral-400 font-mono">
-                        (Includes {formatAUD(q.gstAmount)} GST)
-                      </div>
-                    </div>
-
-                    {q.status === 'converted' ? (
-                      <span className="text-xs font-semibold text-ok">Already invoiced</span>
-                    ) : (
-                    <button
-                      onClick={() => onConvertQuoteToInvoice(q)}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-[#fff] font-medium text-xs transition-colors flex items-center gap-1"
-                    >
-                      Convert to Tax Invoice <ArrowRight className="w-3 h-3" />
-                    </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <QuotesPanel
+          quotes={quotes}
+          clients={clients}
+          taxProfile={taxProfile}
+          onConvertQuoteToInvoice={onConvertQuoteToInvoice}
+          onAddQuote={onAddQuote}
+          onNeedClient={() => {
+            setActiveTab('clients');
+            setShowAddClientModal(true);
+          }}
+        />
       )}
 
       {/* CREATE BOOKING MODAL */}
@@ -385,19 +361,19 @@ export const BookingsView: React.FC<BookingsViewProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
           <div className="w-full max-w-lg bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl p-6 text-sm text-neutral-200 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
-              <h3 className="font-semibold text-white text-base">New Campaign Booking</h3>
+              <h3 className="font-semibold text-white text-base">New {trade.jobNoun.toLowerCase()}</h3>
               <button onClick={() => setShowAddBookingModal(false)} className="text-neutral-400 hover:text-white">✕</button>
             </div>
 
             <form onSubmit={handleCreateBooking} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-1">
-                  Campaign / Deal Title
+                  {trade.titleLabel}
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Summer Activewear UGC Reels Series"
+                  placeholder={trade.titlePlaceholder}
                   value={newCampaignName}
                   onChange={e => setNewCampaignName(e.target.value)}
                   className="w-full px-3 py-2 bg-neutral-950 border border-neutral-700 rounded-lg text-white focus:outline-none focus:border-emerald-500"
@@ -407,7 +383,7 @@ export const BookingsView: React.FC<BookingsViewProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-1">
-                    Client Brand
+                    {trade.clientLabel}
                   </label>
                   <select
                     value={newClientId}
@@ -429,12 +405,9 @@ export const BookingsView: React.FC<BookingsViewProps> = ({
                     onChange={e => setNewBookingType(e.target.value as BookingType)}
                     className="w-full px-3 py-2 bg-neutral-950 border border-neutral-700 rounded-lg text-white focus:outline-none focus:border-emerald-500"
                   >
-                    <option value="campaign">Full Campaign</option>
-                    <option value="ugc">UGC (User Generated Content)</option>
-                    <option value="paid_post">Paid Post / Reel</option>
-                    <option value="event_appearance">Event / Personal Appearance</option>
-                    <option value="modelling">Modelling & Stills</option>
-                    <option value="licensing">Content Licensing</option>
+                    {trade.types.map((item) => (
+                      <option key={item.value} value={item.value}>{item.label}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -466,7 +439,7 @@ export const BookingsView: React.FC<BookingsViewProps> = ({
 
               <div>
                 <label className="block text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-1">
-                  Gross Creator Fee (AUD)
+                  {trade.feeLabel}
                 </label>
                 <input
                   type="number"
@@ -675,3 +648,132 @@ export const BookingsView: React.FC<BookingsViewProps> = ({
     </div>
   );
 };
+
+function QuotesPanel({
+  quotes,
+  clients,
+  taxProfile,
+  onConvertQuoteToInvoice,
+  onAddQuote,
+  onNeedClient,
+}: {
+  quotes: Quote[];
+  clients: Client[];
+  taxProfile: TaxProfile;
+  onConvertQuoteToInvoice: (quote: Quote) => void;
+  onAddQuote?: (quote: Quote) => void;
+  onNeedClient: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [clientId, setClientId] = useState(clients[0]?.id ?? "");
+  const [detail, setDetail] = useState("");
+  const [amount, setAmount] = useState("");
+
+  const save = (e: React.FormEvent) => {
+    e.preventDefault();
+    const subtotal = Math.round((Number(amount) || 0) * 100) / 100;
+    if (!onAddQuote || !clientId || !detail.trim() || subtotal <= 0) return;
+    const gst = taxProfile.gstRegistered ? Math.round(subtotal * 0.1 * 100) / 100 : 0;
+    const today = new Date().toISOString().slice(0, 10);
+    const expiry = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+    const n = quotes.length + 1;
+    onAddQuote({
+      id: `qte-${Date.now()}`,
+      quoteNumber: `QTE-${today.slice(0, 4)}-${String(n).padStart(3, "0")}`,
+      clientId,
+      issueDate: today,
+      expiryDate: expiry,
+      deliverables: [detail.trim()],
+      usageRights: "",
+      exclusivity: "",
+      subtotal,
+      gstAmount: gst,
+      total: Math.round((subtotal + gst) * 100) / 100,
+      status: "sent",
+      terms: "This is a quote, not an invoice. It is valid for 14 days.",
+    });
+    setDetail("");
+    setAmount("");
+    setOpen(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs text-neutral-400">A quote is an offer. It becomes an invoice only when you convert it.</p>
+        <button
+          type="button"
+          onClick={() => (clients.length ? setOpen(true) : onNeedClient())}
+          className="shrink-0 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-[#fff] hover:bg-emerald-500"
+        >
+          <Plus className="mr-1 inline h-3.5 w-3.5" /> New quote
+        </button>
+      </div>
+
+      {open && (
+        <form onSubmit={save} className="space-y-3 rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="text-xs text-neutral-400">
+              Client
+              <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-white">
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>{c.tradingName || c.legalName}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs text-neutral-400 sm:col-span-2">
+              What it is for
+              <input required value={detail} onChange={(e) => setDetail(e.target.value)} className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-white" />
+            </label>
+          </div>
+          <label className="block text-xs text-neutral-400">
+            Price, excluding GST
+            <input required type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1 w-full max-w-xs rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-white" />
+          </label>
+          <div className="flex gap-2">
+            <button type="submit" className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-[#fff]">Save quote</button>
+            <button type="button" onClick={() => setOpen(false)} className="rounded-lg px-4 py-2 text-xs text-neutral-400">Cancel</button>
+          </div>
+        </form>
+      )}
+
+      {quotes.length === 0 && <p className="text-sm text-neutral-500">No quotes yet.</p>}
+
+      <div className="space-y-3">
+        {quotes.map((q) => {
+          const client = clients.find((c) => c.id === q.clientId);
+          return (
+            <div key={q.id} className="flex flex-col justify-between gap-4 rounded-2xl border border-neutral-800 bg-neutral-900 p-5 sm:flex-row sm:items-center">
+              <div>
+                <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-neutral-400">
+                  <span className="font-mono text-white">{q.quoteNumber}</span>
+                  <span>To: {client?.tradingName || "Client"}</span>
+                  <span>Valid until {q.expiryDate}</span>
+                </div>
+                <div className="text-sm font-semibold text-white">{q.deliverables.filter(Boolean).join(" · ") || "Quote"}</div>
+                {q.usageRights ? <div className="mt-1 text-xs text-neutral-400">Usage: {q.usageRights}</div> : null}
+                {q.exclusivity ? <div className="text-xs text-neutral-400">{q.exclusivity}</div> : null}
+              </div>
+              <div className="flex items-center justify-between gap-2 sm:flex-col sm:items-end">
+                <div>
+                  <div className="text-lg font-bold tabular-nums text-white">{formatAUD(q.total)}</div>
+                  <div className="font-mono text-[10px] text-neutral-400">{q.gstAmount ? `Includes ${formatAUD(q.gstAmount)} GST` : "No GST"}</div>
+                </div>
+                {q.status === "converted" ? (
+                  <span className="text-xs font-semibold text-ok">Already invoiced</span>
+                ) : (
+                  <button
+                    onClick={() => onConvertQuoteToInvoice(q)}
+                    className="flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-[#fff] hover:bg-emerald-500"
+                  >
+                    Convert to tax invoice <ArrowRight className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

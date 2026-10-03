@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { OnboardingModal } from "./components/OnboardingModal";
 import { HomeDashboard } from "./components/HomeDashboard";
 import { BookingsView } from "./components/BookingsView";
@@ -14,6 +14,8 @@ import { AuthModal } from "./components/AuthModal";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { useLedger } from "./lib/useLedger";
 import { shownInvoiceStatus } from "./lib/format";
+import { industryById, INDUSTRIES } from "./lib/industries";
+import { applyIndustryTheme, industryAccent } from "./lib/industryTheme";
 import {
   LayoutDashboard,
   Calendar,
@@ -25,7 +27,6 @@ import {
   FolderClosed,
   Sparkles,
   Menu,
-  X,
   RefreshCw,
   Settings,
   LogOut,
@@ -41,20 +42,20 @@ function TalentLanding({ onSignUp, onSample }: { onSignUp: () => void; onSample:
         <div className="max-w-2xl">
           <div className="mb-10 flex items-center gap-4">
             <span className="font-display text-4xl font-extrabold leading-none tracking-[-0.05em] text-ink sm:text-5xl">
-              Talent<span className="brand-gradient-text">OS</span>
+              talent<span className="brand-gradient-text">OS</span>
             </span>
-            <span className="border-l border-accent/30 pl-3 text-sm font-semibold leading-tight text-accent sm:text-base">
-              business,
-              <br /> sorted
+            <span className="border-l border-accent/30 pl-3 text-sm font-semibold leading-tight text-ink sm:text-base">
+              by cdxi
+              <br />
+              <span className="font-medium text-accent">business, sorted</span>
             </span>
           </div>
-          <p className="mb-5 text-sm font-bold uppercase tracking-[0.18em] text-accent">For independent talent</p>
+          <p className="mb-5 text-sm font-bold uppercase tracking-[0.18em] text-accent">For Australian sole traders</p>
           <h1 className="max-w-xl text-balance font-display text-4xl font-bold leading-[1.05] tracking-[-0.04em] text-ink sm:text-6xl">
             Spend less time chasing the business stuff.
           </h1>
           <p className="mt-6 max-w-lg text-pretty text-base leading-7 text-muted sm:text-lg">
-            Bookings, invoices, GST, and the BAS — in one place, in plain language. Open Kira’s sample studio, or start
-            your own books.
+            Jobs, invoices, GST, and the BAS — for any sole trader. The sample studio is a creator. Your own books follow the trade you pick.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
             <button
@@ -76,7 +77,7 @@ function TalentLanding({ onSignUp, onSample }: { onSignUp: () => void; onSample:
         </div>
         <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
           {[
-            ["01", "See a real set of books", "Brand deals, platform payouts, GST and a BAS already in motion."],
+            ["01", "See a real set of books", "A creator’s sample: brand deals, GST, and a BAS already in motion."],
             ["02", "Raise the invoice", "Turn a booking or quote into a tax invoice without double-counting GST."],
             ["03", "Ask Lex", "GST, super, platform fees and usage rights, explained without the jargon."],
           ].map(([number, title, detail]) => (
@@ -98,7 +99,8 @@ function AppContent() {
 
   const [activeTab, setActiveTab] = useState<string>("dashboard");
   const [moneySection, setMoneySection] = useState<"banking" | "expenses" | "receipts" | "ledger">("expenses");
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [launch, setLaunch] = useState<{ kind: "booking" | "invoice"; n: number }>({ kind: "booking", n: 0 });
+  const [moreOpen, setMoreOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"theme" | "notifications">("theme");
@@ -134,9 +136,15 @@ function AppContent() {
     orders.filter((o) => o.status !== "refunded").reduce((acc, o) => acc + o.subtotal, 0) -
     expenses.reduce((acc, e) => acc + e.claimableAmount, 0);
 
+  const trade = industryById(operatingProfile.industryModule);
+
+  useEffect(() => {
+    applyIndustryTheme(user ? operatingProfile.industryModule : "creator");
+  }, [user, operatingProfile.industryModule, theme]);
+
   const navItems = [
     { id: "dashboard", label: "Home", icon: LayoutDashboard },
-    { id: "bookings", label: "Bookings", icon: Calendar, badge: bookings.length },
+    { id: "bookings", label: `${trade.jobNoun}s`, icon: Calendar, badge: bookings.length },
     { id: "sales", label: "Sales", icon: ShoppingBag },
     { id: "invoices", label: "Invoices", icon: FileText, badge: invoices.filter((i) => {
       const status = shownInvoiceStatus(i.status, i.dueDate);
@@ -153,8 +161,9 @@ function AppContent() {
       <div className="grid min-h-screen place-items-center bg-canvas text-ink">
         <div className="text-center">
           <p className="font-display text-3xl font-extrabold tracking-tight">
-            Talent<span className="brand-gradient-text">OS</span>
+            talent<span className="brand-gradient-text">OS</span>
           </p>
+          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted">by cdxi</p>
           <p className="mt-2 text-sm text-muted">Opening your books…</p>
         </div>
       </div>
@@ -187,26 +196,23 @@ function AppContent() {
         />
       )}
 
-      <header className="sticky top-0 z-40 flex min-h-16 items-center justify-between gap-3 border-b border-neutral-800 bg-canvas/85 px-4 py-3 backdrop-blur-2xl sm:px-5">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="rounded-lg p-2 text-muted transition-colors hover:bg-[color:rgba(20,22,29,0.06)] hover:text-ink lg:hidden"
-            aria-label="Toggle navigation menu"
-          >
-            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
-          <button className="flex items-center gap-3" onClick={() => setActiveTab("dashboard")} aria-label="TalentOS">
-            <span className="font-display text-2xl font-extrabold leading-none tracking-[-0.04em] sm:text-3xl">
-              <span className="text-ink">Talent</span>
+      <header className="sticky top-0 z-40 flex min-h-16 items-center justify-between gap-3 border-b border-neutral-800 bg-canvas/90 px-4 py-2.5 backdrop-blur-2xl sm:px-5">
+        <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setActiveTab("dashboard")} aria-label="talentOS by cdxi">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-accent font-display text-lg font-bold text-[#fff] shadow-[0_8px_20px_-8px_var(--color-accent)]">
+            t
+          </span>
+          <span className="min-w-0">
+            <span className="block font-display text-[1.65rem] font-extrabold leading-none tracking-[-0.05em]">
+              <span className="text-ink">talent</span>
               <span className="brand-gradient-text">OS</span>
             </span>
-            <span className="hidden border-l border-accent/30 pl-3 text-sm font-semibold leading-tight tracking-wide text-accent sm:block">
-              business,
-              <br /> sorted
+            <span className="mt-1 block truncate text-[11px] font-semibold leading-none text-muted">
+              by cdxi
+              <span className="text-faint"> · </span>
+              <span className="text-accent">{trade.label}</span>
             </span>
-          </button>
-        </div>
+          </span>
+        </button>
 
         <div className="flex items-center gap-2 text-xs sm:gap-3">
           <div className="hidden items-center gap-2 rounded-full border border-[color:rgba(20,22,29,0.08)] bg-[color:rgba(20,22,29,0.03)] px-3 py-1 text-[11px] font-medium text-muted xl:flex">
@@ -333,41 +339,72 @@ function AppContent() {
           </div>
         </aside>
 
-        {mobileMenuOpen && (
-          <div className="fixed inset-0 z-50 flex flex-col justify-between bg-canvas p-6 lg:hidden">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-[color:rgba(20,22,29,0.08)] pb-4">
-                <span className="font-display text-lg font-extrabold">
-                  Talent<span className="brand-gradient-text">OS</span>
-                </span>
-                <button onClick={() => setMobileMenuOpen(false)} aria-label="Close menu" className="p-2 text-muted">
-                  <X className="h-6 w-6" />
-                </button>
-              </div>
-              <div className="space-y-1">
-                {navItems.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = activeTab === item.id;
+        {moreOpen && (
+          <div className="fixed inset-0 z-50 lg:hidden">
+            <button className="absolute inset-0 bg-black/45" aria-label="Close menu" onClick={() => setMoreOpen(false)} />
+            <div className="absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.25rem)] max-h-[78vh] overflow-y-auto rounded-t-3xl border border-neutral-800 bg-canvas px-4 pb-4 pt-3 shadow-2xl">
+              <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-neutral-700" />
+              <p className="font-display text-2xl font-extrabold leading-none tracking-[-0.04em]">
+                talent<span className="brand-gradient-text">OS</span>
+              </p>
+              <p className="mt-1 text-xs font-semibold text-muted">by cdxi · the colour follows your industry</p>
+              <p className="mb-2 mt-4 text-[10px] font-bold uppercase tracking-[0.16em] text-faint">Industry</p>
+              <div className="grid grid-cols-2 gap-2">
+                {INDUSTRIES.map((item) => {
+                  const selected = trade.id === item.id;
                   return (
                     <button
                       key={item.id}
-                      onClick={() => {
-                        setActiveTab(item.id);
-                        setMobileMenuOpen(false);
-                      }}
-                      className={`flex w-full items-center justify-between rounded-xl p-3 text-sm font-medium ${
-                        isActive ? "bg-accent-soft text-accent" : "text-muted"
+                      type="button"
+                      onClick={() => books.setIndustry(item.id)}
+                      className={`flex min-h-11 items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs font-semibold ${
+                        selected ? "border-accent bg-accent-soft text-accent" : "border-neutral-800 text-ink"
                       }`}
                     >
-                      <span className="flex items-center gap-3">
-                        <Icon className="h-5 w-5" />
-                        {item.label}
-                      </span>
-                      {item.badge !== undefined && <span className="text-xs tabular-nums">{item.badge}</span>}
+                      <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: industryAccent(item.id) }} />
+                      {item.label}
                     </button>
                   );
                 })}
               </div>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                {[
+                  ["compliance", "Tax", ShieldCheck],
+                  ["sales", "Sales", ShoppingBag],
+                  ["files", "Files", FolderClosed],
+                  ["accountant", "Accountant", Briefcase],
+                ].map(([id, label, Icon]) => {
+                  const I = Icon as typeof ShieldCheck;
+                  const active = activeTab === id;
+                  return (
+                    <button
+                      key={id as string}
+                      type="button"
+                      onClick={() => {
+                        setActiveTab(id as string);
+                        setMoreOpen(false);
+                      }}
+                      className={`flex min-h-12 items-center gap-2 rounded-xl px-3 text-sm font-semibold ${
+                        active ? "bg-accent-soft text-accent" : "bg-neutral-900 text-ink"
+                      }`}
+                    >
+                      <I className="h-4 w-4" />
+                      {label as string}
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSettingsTab("theme");
+                  setSettingsOpen(true);
+                  setMoreOpen(false);
+                }}
+                className="mt-2 flex min-h-12 w-full items-center gap-2 rounded-xl bg-neutral-900 px-3 text-sm font-semibold text-ink"
+              >
+                <Settings className="h-4 w-4" /> Settings
+              </button>
             </div>
           </div>
         )}
@@ -397,22 +434,29 @@ function AppContent() {
                   setActiveTab(tab);
                 }}
                 onOpenQuickAdd={(type) => {
-                  if (type === "booking") setActiveTab("bookings");
-                  else if (type === "invoice") setActiveTab("invoices");
-                  else if (type === "sale") setActiveTab("sales");
+                  if (type === "booking") {
+                    setLaunch((prev) => ({ kind: "booking", n: prev.n + 1 }));
+                    setActiveTab("bookings");
+                  } else if (type === "invoice") {
+                    setLaunch((prev) => ({ kind: "invoice", n: prev.n + 1 }));
+                    setActiveTab("invoices");
+                  } else if (type === "sale") setActiveTab("sales");
                   else setActiveTab("money");
                 }}
                 onOpenAssistant={() => setAssistantOpen(true)}
+                industryModule={operatingProfile.industryModule}
               />
             )}
             {activeTab === "bookings" && (
               <BookingsView
+                key={operatingProfile.industryModule ?? "creator"}
                 clients={clients}
                 bookings={bookings}
                 quotes={quotes}
                 taxProfile={taxProfile}
                 onAddBooking={books.addBooking}
                 onAddClient={books.addClient}
+                onAddQuote={books.addQuote}
                 onUpdateBookingStatus={books.updateBookingStatus}
                 onConvertToInvoice={(booking) => {
                   books.convertBookingToInvoice(booking);
@@ -422,6 +466,8 @@ function AppContent() {
                   books.convertQuoteToInvoice(quote);
                   setActiveTab("invoices");
                 }}
+                launchToken={launch.kind === "booking" ? launch.n : 0}
+                industryModule={operatingProfile.industryModule}
               />
             )}
             {activeTab === "sales" && (
@@ -432,6 +478,7 @@ function AppContent() {
                 taxProfile={taxProfile}
                 onAddProduct={books.addProduct}
                 onAddPayout={books.addPayout}
+                onAddOrder={books.addOrder}
               />
             )}
             {activeTab === "invoices" && (
@@ -442,6 +489,8 @@ function AppContent() {
                 taxProfile={taxProfile}
                 onAddInvoice={books.addInvoice}
                 onMarkInvoicePaid={books.markInvoicePaid}
+                bankAccounts={bankAccounts}
+                launchToken={launch.kind === "invoice" ? launch.n : 0}
               />
             )}
             {activeTab === "money" && (
@@ -468,6 +517,13 @@ function AppContent() {
                 annualTaxableIncome={Math.max(0, Math.round(annualTaxableIncome))}
                 onLockBASPeriod={books.lockBasPeriod}
                 onUpdateObligation={books.updateObligation}
+                activityAfterPeriod={
+                  invoices.filter((i) => i.issueDate > basPeriod.endDate).length +
+                  expenses.filter((e) => e.date > basPeriod.endDate).length +
+                  payouts.filter((p) => p.depositDate > basPeriod.endDate).length +
+                  orders.filter((o) => o.date > basPeriod.endDate).length
+                }
+                onApplyRegister={books.applyRegister}
               />
             )}
             {activeTab === "files" && <FilesView documents={documents} onAddDocument={books.addDocument} />}
@@ -491,23 +547,34 @@ function AppContent() {
 
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-canvas/95 px-1 pb-[env(safe-area-inset-bottom)] pt-1 backdrop-blur-xl lg:hidden">
         <div className="grid grid-cols-5">
-          {[
-            ["dashboard", "Home", LayoutDashboard],
-            ["bookings", "Jobs", Calendar],
-            ["invoices", "Invoices", FileText],
-            ["money", "Money", Landmark],
-            ["compliance", "Tax", ShieldCheck],
-          ].map(([id, label, Icon]) => {
-            const active = activeTab === id;
-            const I = Icon as typeof LayoutDashboard;
+          {(
+            [
+              ["dashboard", "Home", LayoutDashboard],
+              ["bookings", trade.jobNoun + "s", Calendar],
+              ["invoices", "Invoices", FileText],
+              ["money", "Money", Landmark],
+              ["more", "More", Menu],
+            ] as const
+          ).map(([id, label, Icon]) => {
+            const moreActive = ["sales", "compliance", "files", "accountant"].includes(activeTab);
+            const active = id === "more" ? moreOpen || moreActive : activeTab === id && !moreOpen;
             return (
               <button
-                key={id as string}
-                onClick={() => setActiveTab(id as string)}
+                key={id}
+                onClick={() => {
+                  if (id === "more") {
+                    setMoreOpen((open) => !open);
+                    return;
+                  }
+                  setMoreOpen(false);
+                  setActiveTab(id);
+                }}
                 className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold ${active ? "text-accent" : "text-muted"}`}
               >
-                <I className="h-5 w-5" />
-                {label as string}
+                <span className={`grid h-7 w-14 place-items-center rounded-full ${active ? "bg-accent-soft" : ""}`}>
+                  <Icon className="h-5 w-5" />
+                </span>
+                {label}
               </button>
             );
           })}
@@ -522,6 +589,9 @@ function AppContent() {
         taxProfile={taxProfile}
         onOpenAuth={() => setAuthOpen(true)}
         onRestartOnboarding={books.restartOnboarding}
+        onApplyRegister={books.applyRegister}
+        industryId={trade.id}
+        onIndustryChange={books.setIndustry}
         initialTab={settingsTab}
       />
       <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} defaultMode="signup" />

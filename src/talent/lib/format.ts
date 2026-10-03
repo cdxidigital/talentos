@@ -45,10 +45,18 @@ export function longDate(iso: string): string {
   return `${d.getDate()} ${MONTHS_LONG[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-/** Positive = in the future. */
+/** Positive = in the future. Uses the demo clock so sample screens stay coherent. */
 export function daysUntil(iso: string): number {
   const d = parse(iso);
   return Math.round((d.getTime() - TODAY.getTime()) / 86_400_000);
+}
+
+/** Whole days from the real today until an ISO date. Negative means overdue. */
+export function calendarDaysUntil(iso: string): number {
+  const due = new Date(iso.length <= 10 ? `${iso}T00:00:00` : iso);
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((due.getTime() - start.getTime()) / 86_400_000);
 }
 
 /** 'YYYY-MM' bucket for grouping by month. */

@@ -70,7 +70,8 @@ export const INITIAL_OPERATING_PROFILE: OperatingProfile = {
   hasContractors: true,
   hasEmployees: false,
   hasInterstateActivity: true,
-  hasOverseasActivity: true
+  hasOverseasActivity: true,
+  industryModule: 'creator'
 };
 
 export const INITIAL_CLIENTS: Client[] = [

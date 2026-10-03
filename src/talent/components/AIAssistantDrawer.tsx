@@ -7,12 +7,9 @@ import {
   X,
   ExternalLink,
   RotateCcw,
-  Globe,
-  CheckCircle2,
-  HelpCircle
+  Globe
 } from 'lucide-react';
 import { BusinessIdentity, TaxProfile } from '../types';
-import { useAuth } from '../context/AuthContext';
 import { askLex } from '../ai.functions';
 interface AIAssistantDrawerProps {
   isOpen: boolean;
@@ -40,20 +37,12 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
   business,
   taxProfile
 }) => {
-  const { user } = useAuth();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const initialGreeting: ChatMessage = {
     id: 'msg-init-lex',
     sender: 'lex',
-    text: `G'day ${business.legalName.split(' ')[0] || 'Creator'}! I'm Lex, your dedicated Australian creator business partner and regulatory advisor. 
-
-I'm grounded in current 2026/2027 ATO guidelines, Fair Work rules, and commercial influencer practices. Ask me about:
-• $75,000 GST thresholds and issuing valid Tax Invoices
-• 12.0% Superannuation Guarantee for your videographers & editors
-• Unbundling OnlyFans/YouTube gross income & platform fee deductions
-• Brand deal contract clauses (usage rights, exclusivity, whitelisting)
-• Deducting camera gear, studios, and travel under ATO logbook rules.`,
+    text: "Hi. Ask me about GST, a job, or what you can claim. I'll keep it short.",
     timestamp: 'Just now'
   };
 
@@ -62,11 +51,9 @@ I'm grounded in current 2026/2027 ATO guidelines, Fair Work rules, and commercia
   const [isTyping, setIsTyping] = useState(false);
 
   const quickQuestions = [
-    'Do I need to register for GST if I hit $75k?',
-    'Do I pay 12% super to my videographer?',
-    'How do I account for OnlyFans 20% platform cut on my BAS?',
-    'Can I claim 80% of my camera & editing laptop?',
-    'What should I charge for 90-day digital usage rights?'
+    'Do I need to register for GST?',
+    'What can I claim?',
+    'How does super work?',
   ];
 
   // Auto-scroll to bottom of messages
@@ -175,12 +162,9 @@ I'm grounded in current 2026/2027 ATO guidelines, Fair Work rules, and commercia
           <div>
             <div className="flex items-center gap-2">
               <h3 className="font-semibold text-white text-sm">Lex</h3>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-AI advisor
-              </span>
             </div>
             <span className="text-[11px] text-neutral-400">
-              Australian Creator & Regulatory Advisor
+              Ask when you need to
             </span>
           </div>
         </div>
@@ -198,23 +182,6 @@ AI advisor
           >
             <X className="w-5 h-5" />
           </button>
-        </div>
-      </div>
-
-      {/* Cloud Sync Status bar */}
-      <div className="px-4 py-1.5 bg-neutral-950/70 border-b border-neutral-800/60 flex items-center justify-between text-[10px] text-neutral-400 font-mono">
-        <div className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span>ONLINE · ATO 2026/2027 TAX GROUNDED</span>
-        </div>
-        <div>
-          {user ? (
-            <span className="text-emerald-400 flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3" /> Cloud Synced
-            </span>
-          ) : (
-            <span className="text-neutral-500">Local Session</span>
-          )}
         </div>
       </div>
 
@@ -246,7 +213,7 @@ AI advisor
                   <div className="mt-3 pt-2.5 border-t border-neutral-800/80 space-y-1">
                     <div className="text-[10px] font-mono text-neutral-400 flex items-center gap-1 uppercase">
                       <Globe className="w-3 h-3 text-emerald-400" />
-                      <span>Verified Regulatory Sources:</span>
+                      <span>Sources</span>
                     </div>
                     <div className="flex flex-wrap gap-1.5 pt-0.5">
                       {m.sources.map((src, idx) => (
@@ -288,7 +255,7 @@ AI advisor
             <div className="w-7 h-7 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0">
               <Bot className="w-4 h-4 animate-spin" />
             </div>
-            <span className="text-[11px]">Lex is consulting ATO tax rulings & search data...</span>
+            <span className="text-[11px]">Thinking…</span>
           </div>
         )}
 
@@ -296,23 +263,22 @@ AI advisor
       </div>
 
       {/* Suggested Quick Queries */}
-      <div className="max-h-[clamp(96px,22dvh,180px)] shrink-0 space-y-1.5 overflow-y-auto overscroll-contain border-t border-neutral-800/80 bg-neutral-950/60 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <span className="text-[10px] font-mono text-neutral-500 uppercase tracking-wider block">
-          Frequent Creator Questions:
-        </span>
+      {messages.length === 1 && (
+      <div className="shrink-0 space-y-2 border-t border-neutral-800/80 bg-neutral-950/40 px-3 py-3">
         <div className="flex flex-wrap gap-1.5">
-          {quickQuestions.map((q, idx) => (
+          {quickQuestions.map((q) => (
             <button
-              key={idx}
+              key={q}
               onClick={() => handleSend(q)}
               disabled={isTyping}
-              className="text-[11px] text-neutral-300 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 px-2.5 py-1 rounded-lg text-left transition-colors cursor-pointer disabled:opacity-50"
+              className="rounded-full border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-left text-[11px] text-neutral-300 hover:border-neutral-700 hover:bg-neutral-800 disabled:opacity-50"
             >
               {q}
             </button>
           ))}
         </div>
       </div>
+      )}
 
       {/* Input Field */}
       <div className="shrink-0 border-t border-neutral-800 bg-neutral-950 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
@@ -325,7 +291,7 @@ AI advisor
         >
           <input
             type="text"
-            placeholder="Ask Lex about ABN, GST, 12% super, OnlyFans cut, or contracts..."
+            placeholder="Ask a question"
             value={input}
             onChange={e => setInput(e.target.value)}
             disabled={isTyping}

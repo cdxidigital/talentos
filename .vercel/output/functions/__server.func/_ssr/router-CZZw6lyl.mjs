@@ -2,8 +2,8 @@ import { i as __toESM, n as __exportAll } from "../_runtime.mjs";
 import { _ as createFileRoute, b as require_jsx_runtime, d as Scripts, f as HeadContent, g as lazyRouteComponent, h as Outlet, m as createRouter, q as require_react, v as createRootRoute, y as useRouter } from "../_libs/@tanstack/react-router+[...].mjs";
 import { o as TriangleAlert } from "../_libs/lucide-react.mjs";
 import { a as union, i as string, n as number, r as object, t as literal } from "../_libs/zod.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/router-C-4uuMCl.js
-var router_C_4uuMCl_exports = /* @__PURE__ */ __exportAll({ getRouter: () => getRouter });
+//#region node_modules/.nitro/vite/services/ssr/assets/router-CZZw6lyl.js
+var router_CZZw6lyl_exports = /* @__PURE__ */ __exportAll({ getRouter: () => getRouter });
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var FALLBACK_MESSAGE = "An unexpected error occurred. Try reloading the page.";
@@ -297,8 +297,8 @@ function PreviewHostBridge() {
 	}, [router]);
 	return null;
 }
-var styles_default = "/assets/styles-CvnbkF9z.css";
-var APP_NAME = "TalentOS";
+var styles_default = "/assets/styles-BWwUD5eF.css";
+var APP_NAME = "talentOS";
 var Route$1 = createRootRoute({
 	head: () => ({
 		meta: [
@@ -310,11 +310,23 @@ var Route$1 = createRootRoute({
 			{ title: APP_NAME },
 			{
 				name: "description",
-				content: "TalentOS keeps bookings, invoices, GST and BAS in one calm place for Australian creators."
+				content: "talentOS by cdxi. Jobs, invoices, GST and BAS for Australian sole traders."
 			},
 			{
 				name: "theme-color",
-				content: "#f4f6fb"
+				content: "#7434d1"
+			},
+			{
+				name: "application-name",
+				content: "talentOS"
+			},
+			{
+				name: "author",
+				content: "cdxi"
+			},
+			{
+				name: "apple-mobile-web-app-title",
+				content: "talentOS"
 			}
 		],
 		links: [
@@ -360,7 +372,7 @@ var Route$1 = createRootRoute({
 		] })]
 	})
 });
-var $$splitComponentImporter = () => import("./routes-ufIdWBor.mjs");
+var $$splitComponentImporter = () => import("./routes-JSczJ_c9.mjs");
 var rootRouteChildren = { IndexRoute: createFileRoute("/")({ component: lazyRouteComponent($$splitComponentImporter, "component") }).update({
 	id: "/",
 	path: "/",
@@ -374,4 +386,4 @@ function getRouter() {
 	});
 }
 //#endregion
-export { getRouter, router_C_4uuMCl_exports as t };
+export { getRouter, router_CZZw6lyl_exports as t };

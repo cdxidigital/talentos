@@ -1,6 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Booking, Client, Expense, Invoice, JournalEntry, ObligationItem, PlatformPayout, Product, Quote } from "../types";
+import type { Booking, Client, EntityType, Expense, Invoice, JournalEntry, ObligationItem, Order, PlatformPayout, Product, Quote } from "../types";
+import {
+  addExportToBas,
+  addPurchaseToBas,
+  addSaleToBas,
+  creditAccount,
+  ensureOperating,
+  nextJournalNumber,
+  orderJournal,
+  paymentJournal,
+  payoutJournal,
+  round2,
+} from "./books";
 import { nextInvoiceNumber } from "./format";
+import type { IndustryModule } from "./industries";
 import {
   demoWorkspace,
   emptyWorkspace,
@@ -49,6 +62,13 @@ export function useLedger(userId: string | null, demo: boolean) {
     [patch],
   );
 
+  const setIndustry = useCallback((industryModule: IndustryModule) => {
+    patch((prev) => ({
+      ...prev,
+      operatingProfile: { ...prev.operatingProfile, industryModule },
+    }));
+  }, [patch]);
+
   const restartOnboarding = useCallback(() => {
     patch((prev) => ({ ...prev, onboarded: false }));
   }, [patch]);
@@ -66,6 +86,10 @@ export function useLedger(userId: string | null, demo: boolean) {
     patch((prev) => ({ ...prev, clients: [...prev.clients, client] }));
   }, [patch]);
 
+  const addQuote = useCallback((quote: Quote) => {
+    patch((prev) => ({ ...prev, quotes: [quote, ...prev.quotes] }));
+  }, [patch]);
+
   const updateBookingStatus = useCallback((bookingId: string, status: Booking["status"]) => {
     patch((prev) => ({
       ...prev,
@@ -74,33 +98,35 @@ export function useLedger(userId: string | null, demo: boolean) {
   }, [patch]);
 
   const addInvoice = useCallback((invoice: Invoice) => {
-    patch((prev) => ({ ...prev, invoices: [invoice, ...prev.invoices] }));
+    patch((prev) => ({
+      ...prev,
+      invoices: [invoice, ...prev.invoices],
+      basPeriod:
+        prev.taxProfile.accountingBasis === "accruals"
+          ? addSaleToBas(prev.basPeriod, invoice.issueDate, invoice.subtotal, invoice.gstTotal, prev.taxProfile.gstRegistered)
+          : prev.basPeriod,
+    }));
   }, [patch]);
 
   const addExpense = useCallback((expense: Expense) => {
     patch((prev) => {
-      const account = prev.bankAccounts.find((a) => a.type === "transaction") ?? prev.bankAccounts[0];
-      const txn = account
-        ? {
-            id: `txn-${expense.id}`,
-            bankAccountId: account.id,
-            date: expense.date,
-            description: `${expense.supplier} — ${expense.description}`,
-            amount: -Math.abs(expense.grossAmount),
-            status: "CATEGORISED" as const,
-            matchedType: "expense" as const,
-            matchedId: expense.id,
-          }
-        : null;
+      const { accounts, account } = ensureOperating(prev.bankAccounts);
+      const txn = {
+        id: `txn-${expense.id}`,
+        bankAccountId: account.id,
+        date: expense.date,
+        description: `${expense.supplier} — ${expense.description}`,
+        amount: -Math.abs(expense.grossAmount),
+        status: "CATEGORISED" as const,
+        matchedType: "expense" as const,
+        matchedId: expense.id,
+      };
       return {
         ...prev,
-        expenses: [{ ...expense, bankTransactionId: txn?.id, isReconciled: false }, ...prev.expenses],
-        bankTransactions: txn ? [txn, ...prev.bankTransactions] : prev.bankTransactions,
-        bankAccounts: account
-          ? prev.bankAccounts.map((a) =>
-              a.id === account.id ? { ...a, balance: Math.round((a.balance - expense.grossAmount) * 100) / 100 } : a,
-            )
-          : prev.bankAccounts,
+        expenses: [{ ...expense, bankTransactionId: txn.id, isReconciled: false }, ...prev.expenses],
+        bankTransactions: [txn, ...prev.bankTransactions],
+        bankAccounts: creditAccount(accounts, account.id, -Math.abs(expense.grossAmount)),
+        basPeriod: addPurchaseToBas(prev.basPeriod, expense, prev.taxProfile.gstRegistered),
         documents: expense.receiptName
           ? [
               {
@@ -139,9 +165,96 @@ export function useLedger(userId: string | null, demo: boolean) {
     patch((prev) => ({ ...prev, products: [product, ...prev.products] }));
   }, [patch]);
 
-  const addPayout = useCallback((payout: PlatformPayout) => {
-    patch((prev) => ({ ...prev, payouts: [payout, ...prev.payouts] }));
+  const addOrder = useCallback((order: Order, productId?: string) => {
+    patch((prev) => {
+      const { accounts, account } = ensureOperating(prev.bankAccounts);
+      const txn = {
+        id: `txn-${order.id}`,
+        bankAccountId: account.id,
+        date: order.date,
+        description: `Sale ${order.orderNumber} — ${order.customerName}`,
+        amount: order.total,
+        status: "MATCHED" as const,
+        matchedId: order.id,
+        notes: order.itemsSummary,
+      };
+      const entry = orderJournal(order, nextJournalNumber(prev.journalEntries.map((j) => j.entryNumber)));
+      return {
+        ...prev,
+        orders: [order, ...prev.orders],
+        products: productId
+          ? prev.products.map((p) =>
+              p.id === productId && p.inventoryEnabled
+                ? { ...p, inventoryQuantity: Math.max(0, p.inventoryQuantity - 1) }
+                : p,
+            )
+          : prev.products,
+        bankTransactions: [txn, ...prev.bankTransactions],
+        bankAccounts: creditAccount(accounts, account.id, order.total),
+        journalEntries: [entry, ...prev.journalEntries],
+        basPeriod: addSaleToBas(prev.basPeriod, order.date, order.subtotal, order.gstAmount, prev.taxProfile.gstRegistered),
+      };
+    });
   }, [patch]);
+
+  const addPayout = useCallback((payout: PlatformPayout) => {
+    patch((prev) => {
+      const { accounts, account } = ensureOperating(prev.bankAccounts);
+      const txn = {
+        id: `txn-${payout.id}`,
+        bankAccountId: account.id,
+        date: payout.depositDate,
+        description: `${payout.platform} payout`,
+        amount: round2(payout.netPayout),
+        status: "MATCHED" as const,
+        matchedType: "payout" as const,
+        matchedId: payout.id,
+      };
+      const entry = payoutJournal({
+        id: payout.id,
+        platform: payout.platform,
+        date: payout.depositDate,
+        gross: payout.grossRevenue,
+        platformFee: payout.platformFee,
+        processing: payout.paymentProcessingFee,
+        commission: payout.managementCommission,
+        net: round2(payout.netPayout),
+        entryNumber: nextJournalNumber(prev.journalEntries.map((j) => j.entryNumber)),
+      });
+      return {
+        ...prev,
+        payouts: [{ ...payout, bankTransactionId: txn.id, status: "deposited" }, ...prev.payouts],
+        bankTransactions: [txn, ...prev.bankTransactions],
+        bankAccounts: creditAccount(accounts, account.id, payout.netPayout),
+        journalEntries: [entry, ...prev.journalEntries],
+        basPeriod: addExportToBas(
+          prev.basPeriod,
+          payout.depositDate,
+          payout.grossRevenue,
+          round2(payout.platformFee + payout.paymentProcessingFee + payout.managementCommission),
+        ),
+      };
+    });
+  }, [patch]);
+
+  const applyRegister = useCallback(
+    (hit: { legalName: string; gstRegistered: boolean; entityType?: EntityType; location: string }) => {
+      patch((prev) => ({
+        ...prev,
+        business: {
+          ...prev.business,
+          legalName: hit.legalName || prev.business.legalName,
+          entityType: hit.entityType ?? prev.business.entityType,
+          businessAddress: hit.location || prev.business.businessAddress,
+          status: "active",
+          abnLastVerifiedAt: new Date().toISOString(),
+          abrLastCheckedAt: new Date().toISOString(),
+        },
+        taxProfile: { ...prev.taxProfile, gstRegistered: hit.gstRegistered },
+      }));
+    },
+    [patch],
+  );
 
   const lockBasPeriod = useCallback(() => {
     patch((prev) => ({
@@ -255,20 +368,23 @@ export function useLedger(userId: string | null, demo: boolean) {
     patch((prev) => {
       const invoice = prev.invoices.find((i) => i.id === invoiceId);
       if (!invoice || invoice.status === "paid") return prev;
-      const account = prev.bankAccounts.find((a) => a.type === "transaction") ?? prev.bankAccounts[0];
+      const { accounts, account } = ensureOperating(prev.bankAccounts);
       const paidDate = todayIso();
-      const txn = account
-        ? {
-            id: `txn-pay-${invoice.id}`,
-            bankAccountId: account.id,
-            date: paidDate,
-            description: `Payment ${invoice.invoiceNumber}`,
-            amount: invoice.total,
-            status: "MATCHED" as const,
-            matchedType: "invoice" as const,
-            matchedId: invoice.id,
-          }
-        : null;
+      const txn = {
+        id: `txn-pay-${invoice.id}`,
+        bankAccountId: account.id,
+        date: paidDate,
+        description: `Payment ${invoice.invoiceNumber}`,
+        amount: invoice.total,
+        status: "MATCHED" as const,
+        matchedType: "invoice" as const,
+        matchedId: invoice.id,
+      };
+      const entry = paymentJournal(invoice, paidDate, nextJournalNumber(prev.journalEntries.map((j) => j.entryNumber)));
+      const basPeriod =
+        prev.taxProfile.accountingBasis === "cash"
+          ? addSaleToBas(prev.basPeriod, paidDate, invoice.subtotal, invoice.gstTotal, prev.taxProfile.gstRegistered)
+          : prev.basPeriod;
       return {
         ...prev,
         invoices: prev.invoices.map((i) =>
@@ -290,12 +406,10 @@ export function useLedger(userId: string | null, demo: boolean) {
         bookings: prev.bookings.map((b) =>
           b.invoiceId === invoiceId || b.id === invoice.bookingId ? { ...b, status: "paid" } : b,
         ),
-        bankTransactions: txn ? [txn, ...prev.bankTransactions] : prev.bankTransactions,
-        bankAccounts: account
-          ? prev.bankAccounts.map((a) =>
-              a.id === account.id ? { ...a, balance: Math.round((a.balance + invoice.total) * 100) / 100 } : a,
-            )
-          : prev.bankAccounts,
+        bankTransactions: [txn, ...prev.bankTransactions],
+        bankAccounts: creditAccount(accounts, account.id, invoice.total),
+        journalEntries: [entry, ...prev.journalEntries],
+        basPeriod,
       };
     });
   }, [patch]);
@@ -305,20 +419,24 @@ export function useLedger(userId: string | null, demo: boolean) {
     ready,
     patch,
     completeOnboarding,
+    setIndustry,
     restartOnboarding,
     resetDemo,
     addBooking,
     addClient,
+    addQuote,
     updateBookingStatus,
     addInvoice,
     addExpense,
     reconcileTransaction,
     addJournalEntry,
     addProduct,
+    addOrder,
     addPayout,
     lockBasPeriod,
     updateObligation,
     addDocument,
+    applyRegister,
     convertBookingToInvoice,
     convertQuoteToInvoice,
     markInvoicePaid,
