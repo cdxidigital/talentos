@@ -220,7 +220,7 @@ function AppContent() {
           <button
             type="button"
             onClick={() => setMoreOpen((open) => !open)}
-            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900/60 text-ink transition-colors hover:bg-neutral-800 lg:hidden"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900/60 text-ink transition-colors hover:bg-neutral-800"
             aria-label={moreOpen ? "Close navigation menu" : "Open navigation menu"}
             aria-expanded={moreOpen}
           >
@@ -276,7 +276,7 @@ function AppContent() {
       )}
 
       <div className="flex flex-1 overflow-hidden">
-        <aside className="hidden w-56 shrink-0 flex-col justify-between border-r border-neutral-800 bg-canvas/70 p-3 backdrop-blur-xl lg:flex xl:w-64">
+        <aside className={`${moreOpen ? "lg:flex" : "lg:hidden"} hidden w-56 shrink-0 flex-col justify-between border-r border-neutral-800 bg-canvas/70 p-3 backdrop-blur-xl transition-[width,opacity] duration-200 xl:w-64`}>
           <nav className="space-y-1">
             <div className="px-3 pb-2 text-[10px] font-medium uppercase tracking-wider text-faint">Your business</div>
             {navItems.map((item) => {
