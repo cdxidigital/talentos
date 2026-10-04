@@ -265,10 +265,10 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   const progressPercent = Math.round((completedMilestones / ownerMilestones.length) * 100);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 pb-12 animate-rise">
+    <div className="mx-auto max-w-6xl space-y-4 pb-8 sm:space-y-6 sm:pb-12 animate-rise">
       {/* Greeting + primary actions */}
-      <GlassCard elevated className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-        <div>
+      <GlassCard elevated className="flex flex-col gap-4 p-4 sm:gap-5 sm:p-6 md:flex-row md:items-center md:justify-between">
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-mono text-muted">
             {creator.creatorHandle ? (
               <>
@@ -291,19 +291,19 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
           <button
             onClick={() => onOpenQuickAdd('booking')}
-            className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-neutral-700/60 bg-neutral-900 px-3.5 py-2 text-xs font-semibold text-ink transition-colors hover:bg-neutral-800 sm:w-auto"
+            className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-neutral-700/60 bg-neutral-900 px-3.5 py-2 text-xs font-semibold text-ink transition-colors hover:bg-neutral-800 sm:w-auto"
           >
             <Plus className="h-3.5 w-3.5" /> New {trade.jobNoun.toLowerCase()}
           </button>
           <button
             onClick={() => onOpenQuickAdd('invoice')}
-            className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-accent px-3.5 py-2 text-xs font-semibold text-[#fff] shadow-[0_8px_24px_rgba(139,60,240,0.28)] transition-colors hover:bg-accent-strong sm:w-auto"
+            className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-accent px-3.5 py-2 text-xs font-semibold text-[#fff] shadow-[0_8px_24px_rgba(139,60,240,0.28)] transition-colors hover:bg-accent-strong sm:w-auto"
           >
             <FileText className="h-3.5 w-3.5" /> Issue tax invoice
           </button>
           <button
             onClick={onOpenAssistant}
-            className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-accent/30 bg-accent-soft px-3.5 py-2 text-xs font-semibold text-accent transition-colors hover:bg-accent/15 sm:w-auto"
+            className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-accent/30 bg-accent-soft px-3.5 py-2 text-xs font-semibold text-accent transition-colors hover:bg-accent/15 sm:w-auto"
             title="Ask AI Assistant Lex"
           >
             <Sparkles className="h-3.5 w-3.5" /> Ask Lex
@@ -312,7 +312,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
       </GlassCard>
 
       {/* Friendly progress cue for new owners */}
-      <GlassCard className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:gap-6">
+      <GlassCard className="flex flex-col gap-4 p-4 sm:p-5 md:flex-row md:items-center md:gap-6">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-accent-soft font-display text-sm font-bold text-accent">
             {completedMilestones}/{ownerMilestones.length}
@@ -344,7 +344,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
       <section>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <SectionLabel>What&apos;s next</SectionLabel>
-          <div className="flex items-center gap-3 text-[11px] font-medium text-muted">
+          <div className="flex flex-wrap items-center justify-end gap-x-2.5 gap-y-1 text-[10px] font-medium text-muted sm:gap-3 sm:text-[11px]">
             <span className="inline-flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-alert" /> Needs action
             </span>
@@ -379,7 +379,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                     <span className={`absolute inset-y-0 left-0 w-1 ${style.rail}`} aria-hidden="true" />
                     <button
                       onClick={() => onNavigate(step.tab)}
-                      className="group flex w-full items-center gap-3 py-4 pl-5 pr-4 text-left transition-colors hover:bg-[color:rgba(139,60,240,0.05)] sm:gap-4 sm:pl-6 sm:pr-5"
+                      className="group flex w-full items-center gap-2.5 py-3.5 pl-4 pr-3 text-left transition-colors hover:bg-[color:rgba(139,60,240,0.05)] sm:gap-4 sm:py-4 sm:pl-6 sm:pr-5"
                     >
                       <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-display text-sm font-bold ring-1 ${style.badge}`}>
                         {i + 1}
