@@ -196,13 +196,15 @@ function AppContent() {
         />
       )}
 
-      <header className="sticky top-0 z-40 flex min-h-16 items-center justify-between gap-3 border-b border-neutral-800 bg-canvas/90 px-4 py-2.5 backdrop-blur-2xl sm:px-5">
-        <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setActiveTab("dashboard")} aria-label="talentOS by cdxi">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-accent font-display text-lg font-bold text-[#fff] shadow-[0_8px_20px_-8px_var(--color-accent)]">
-            t
-          </span>
-          <span className="min-w-0">
-            <span className="block font-display text-[1.65rem] font-extrabold leading-none tracking-[-0.05em]">
+      <header className="sticky top-0 z-40 flex min-h-16 items-center justify-between gap-2 border-b border-neutral-800 bg-canvas/90 px-3 py-2.5 backdrop-blur-2xl sm:gap-3 sm:px-5">
+        <button className="flex min-w-0 flex-1 items-center gap-2.5 text-left sm:gap-3" onClick={() => setActiveTab("dashboard")} aria-label="talentOS by cdxi">
+          <img
+            src="/talentos-logo.png"
+            alt="talentOS"
+            className="h-10 w-auto max-w-[112px] shrink-0 object-contain object-left sm:h-11 sm:max-w-[132px]"
+          />
+          <span className="hidden min-w-0 sm:block">
+            <span className="block truncate font-display text-[1.65rem] font-extrabold leading-none tracking-[-0.05em]">
               <span className="text-ink">talent</span>
               <span className="brand-gradient-text">OS</span>
             </span>
@@ -214,7 +216,16 @@ function AppContent() {
           </span>
         </button>
 
-        <div className="flex items-center gap-2 text-xs sm:gap-3">
+        <div className="flex items-center gap-1.5 text-xs sm:gap-3">
+          <button
+            type="button"
+            onClick={() => setMoreOpen((open) => !open)}
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900/60 text-ink transition-colors hover:bg-neutral-800 lg:hidden"
+            aria-label={moreOpen ? "Close navigation menu" : "Open navigation menu"}
+            aria-expanded={moreOpen}
+          >
+            {moreOpen ? <span className="text-xl leading-none" aria-hidden="true">×</span> : <Menu className="h-5 w-5" />}
+          </button>
           <div className="hidden items-center gap-2 rounded-full border border-[color:rgba(20,22,29,0.08)] bg-[color:rgba(20,22,29,0.03)] px-3 py-1 text-[11px] font-medium text-muted xl:flex">
             <span className="font-semibold text-ink">{business.legalName || "Your business"}</span>
             <span className="text-faint">·</span>
